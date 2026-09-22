@@ -778,6 +778,7 @@
       "duration": "Shot duration",
       "durationUnit": "s (4-15)",
       "durationUnitWan": "s (2-30)",
+      "durationUnitHappyHorse": "s (3-15)",
       "durationHint": "Edits save to the storyboard instantly and apply to list and batch generation",
       "effective": "{model} · {res} · {dur}s",
       "boundRefs": "Bound References",

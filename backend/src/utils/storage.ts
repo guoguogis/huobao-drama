@@ -7,6 +7,9 @@ import sharp from 'sharp'
 import { v4 as uuid } from 'uuid'
 import { STORAGE_ROOT } from './paths.js'
 
+/** 单次远程下载的总超时：不设超时时若连接挂起，任务会永远停在 processing */
+const DOWNLOAD_TIMEOUT_MS = 300_000
+
 /**
  * 下载远程文件到本地存储
  */
@@ -18,7 +21,7 @@ export async function downloadFile(url: string, subDir: string): Promise<string>
   const filename = `${uuid()}${ext}`
   const filePath = path.join(dir, filename)
 
-  const resp = await fetch(url)
+  const resp = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
   if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
 
   const buffer = Buffer.from(await resp.arrayBuffer())

@@ -778,6 +778,7 @@
       "duration": "分镜时长",
       "durationUnit": "s（4-15）",
       "durationUnitWan": "s（2-30）",
+      "durationUnitHappyHorse": "s（3-15）",
       "durationHint": "修改即保存到分镜，列表与批量生成同步生效",
       "effective": "{model} · {res} · {dur}s",
       "boundRefs": "绑定参考图",

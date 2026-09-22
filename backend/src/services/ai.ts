@@ -5,6 +5,11 @@ import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { logTaskProgress, logTaskWarn } from '../utils/task-logger.js'
 import { joinProviderUrl } from './adapters/url.js'
+import {
+  VOLCENGINE_PLAN_PROVIDER,
+  isVolcengineProvider,
+  volcengineApiPrefix,
+} from './adapters/volcengine-endpoints.js'
 
 export type ServiceType = 'text' | 'image' | 'video'
 
@@ -29,9 +34,9 @@ export function parseConfigTemperature(settingsRaw: string | null | undefined): 
 }
 
 export const officialProviders: Record<ServiceType, readonly string[]> = {
-  text: ['openai', 'gemini', 'volcengine'],
-  image: ['openai', 'gemini', 'volcengine'],
-  video: ['volcengine', 'minimax', 'aliyun'],
+  text: ['openai', 'gemini', 'volcengine', VOLCENGINE_PLAN_PROVIDER],
+  image: ['openai', 'gemini', 'volcengine', VOLCENGINE_PLAN_PROVIDER],
+  video: ['volcengine', VOLCENGINE_PLAN_PROVIDER, 'minimax', 'aliyun'],
 }
 
 export function isOfficialProvider(serviceType?: string | null, provider?: string | null): boolean {
@@ -50,8 +55,9 @@ export function getTextProviderBaseUrl(config: AIConfig) {
     return joinProviderUrl(config.baseUrl, '/v1beta', '')
   }
 
-  if (provider === 'volcengine') {
-    return joinProviderUrl(config.baseUrl, '/api/v3', '')
+  // 按量 /api/v3 与 AgentPlan 套餐 /api/plan/v3 共用同一套 OpenAI 兼容协议
+  if (isVolcengineProvider(provider)) {
+    return joinProviderUrl(config.baseUrl, volcengineApiPrefix(provider), '')
   }
 
   return config.baseUrl

@@ -778,6 +778,7 @@
       "duration": "분镜 길이",
       "durationUnit": "초(4-15)",
       "durationUnitWan": "초(2-30)",
+      "durationUnitHappyHorse": "초(3-15)",
       "durationHint": "수정 시 스토리보드에 즉시 저장되어 목록 및 배치 생성에도 적용됩니다",
       "effective": "{model} · {res} · {dur}초",
       "boundRefs": "바인딩 참조 이미지",

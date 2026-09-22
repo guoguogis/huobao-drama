@@ -4,6 +4,7 @@ import { db, getInsertId, schema } from '../db/index.js'
 import { success, notFound, created, badRequest, now } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
 import { joinProviderUrl } from '../services/adapters/url.js'
+import { isVolcengineProvider, volcengineApiPrefix } from '../services/adapters/volcengine-endpoints.js'
 import { isOfficialProvider, parseConfigTemperature } from '../services/ai.js'
 import { redactUrl, logTaskError, logTaskProgress, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -42,7 +43,7 @@ function geminiHeaders(apiKey?: string, withJson = false) {
   return headers
 }
 
-function buildProbe(serviceType: string, provider: string, baseUrl: string, model?: string, apiKey?: string) {
+export function buildProbe(serviceType: string, provider: string, baseUrl: string, model?: string, apiKey?: string) {
   const p = provider.toLowerCase()
   const m = model || ''
 
@@ -70,15 +71,25 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
     }
   }
 
-  if (p === 'volcengine') {
-    const path = serviceType === 'video'
-      ? '/contents/generations/tasks'
-      : serviceType === 'text'
-        ? '/chat/completions'
-        : '/images/generations'
+  // 火山引擎系：按量走 /api/v3，AgentPlan 套餐走 /api/plan/v3，报文与路径同构
+  if (isVolcengineProvider(p)) {
+    // 文本：/chat/completions 不接受空体，上游会以 MissingParameter(model) 拒绝，
+    // 把「鉴权与路径是否正常」这个真正的结论掩盖成含糊的 400。
+    // 与 gemini 分支同理，改发最小合法请求体，换一个确定的 200。
+    if (serviceType === 'text') {
+      if (!m) throw new Error('该文本配置未填写模型，无法测试连通性；请先添加至少一个模型')
+      return {
+        method: 'POST',
+        url: joinProviderUrl(baseUrl, volcengineApiPrefix(p), '/chat/completions'),
+        headers: bearerHeaders(apiKey, true),
+        body: { model: m, messages: [{ role: 'user', content: 'hi' }] },
+      }
+    }
+    // 图片/视频：维持空体探测——真实请求会创建计费任务
+    const path = serviceType === 'video' ? '/contents/generations/tasks' : '/images/generations'
     return {
       method: 'POST',
-      url: joinProviderUrl(baseUrl, '/api/v3', path),
+      url: joinProviderUrl(baseUrl, volcengineApiPrefix(p), path),
       headers: bearerHeaders(apiKey, true),
       body: {},
     }
@@ -178,7 +189,13 @@ app.post('/test', async (c) => {
   }
 
   const model = Array.isArray(body.model) ? body.model[0] : body.model
-  const probe = buildProbe(body.service_type, body.provider, body.base_url, model, body.api_key)
+  // 构建期即可判定的问题（如文本探针缺少模型）直接回明确提示，不必打上游换一个含糊的 400
+  let probe: ReturnType<typeof buildProbe>
+  try {
+    probe = buildProbe(body.service_type, body.provider, body.base_url, model, body.api_key)
+  } catch (e: any) {
+    return badRequest(c, e?.message || '探测请求构建失败')
+  }
   const probeUrl = redactUrl(probe.url)
 
   logTaskProgress('AIConfig', 'probe-start', {
@@ -196,6 +213,10 @@ app.post('/test', async (c) => {
     })
     const text = await resp.text()
     const reachable = [200, 204, 400, 401, 403].includes(resp.status)
+    // 图片/视频探针刻意不带 model（真实请求会创建计费任务），被上游按参数校验拒绝属预期结果。
+    // 它只说明端点可达，并不指向鉴权或路径问题，措辞不能误导成「配置可能有错」。
+    const missingParam = !resp.ok && resp.status === 400
+      && /MissingParameter|RequiredParameter|InvalidParameter/i.test(text)
     const payload = {
       ok: resp.ok,
       reachable,
@@ -204,7 +225,11 @@ app.post('/test', async (c) => {
       method: probe.method,
       url: probeUrl,
       message: reachable
-        ? (resp.ok ? '端点可访问，认证与路径基本正常' : '端点已响应，请根据状态码判断认证或路径是否正确')
+        ? (resp.ok
+          ? '端点可访问，认证与路径基本正常'
+          : missingParam
+            ? '端点可达（非 404/401）；上游按参数校验拒绝了未携带 model 的探测请求，图片/视频配置出现该结果属预期'
+            : '端点已响应，请根据状态码判断认证或路径是否正确')
         : '端点未按预期响应，请检查 Base URL 和代理前缀',
       response_preview: text.slice(0, 240),
     }

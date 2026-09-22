@@ -1,7 +1,10 @@
 /**
  * 火山引擎 Seedance 2.0 视频生成 Adapter
- * 端点: /api/v3/contents/generations/tasks (注意 /api/v3 前缀)
+ * 端点: {prefix}/contents/generations/tasks
  * 响应: { id: "task-xxx" } -> 轮询获取状态
+ *
+ * prefix 由 provider 决定：按量 /api/v3、AgentPlan 套餐 /api/plan/v3
+ * （两者报文结构一致，仅计费通道不同）
  *
  * 仅支持 Doubao Seedance 2.0+ 系列模型，生成模式只保留多模态参考:
  * - reference   多模态参考（≤9 reference_image + ≤3 reference_video + ≤3 reference_audio + 可选文本）
@@ -16,6 +19,7 @@ import type {
   VideoPollResponse,
 } from './types'
 import { joinProviderUrl } from './url'
+import { VOLCENGINE_API_PREFIX } from './volcengine-endpoints'
 
 /** 仅支持 Seedance 2.0+ 系列（前缀匹配，兼容未来 2.0.x 变体） */
 const SEEDANCE2_MODEL_PREFIX = 'doubao-seedance-2-0'
@@ -35,7 +39,15 @@ function parseUrlArray(raw?: string | null): string[] {
 }
 
 export class VolcEngineVideoAdapter implements VideoProviderAdapter {
-  provider = 'volcengine'
+  provider: string
+
+  /** API 路径前缀，见 volcengine-endpoints.ts */
+  private apiPrefix: string
+
+  constructor(provider = 'volcengine', apiPrefix = VOLCENGINE_API_PREFIX) {
+    this.provider = provider
+    this.apiPrefix = apiPrefix
+  }
 
   buildGenerateRequest(config: AIConfig, record: VideoGenerationRecord): ProviderRequest {
     const model = record.model || config.model || DEFAULT_MODEL
@@ -82,7 +94,7 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     }
 
     return {
-      url: joinProviderUrl(config.baseUrl, '/api/v3', '/contents/generations/tasks'),
+      url: joinProviderUrl(config.baseUrl, this.apiPrefix, '/contents/generations/tasks'),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,7 +118,7 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
 
   buildPollRequest(config: AIConfig, taskId: string): ProviderRequest {
     return {
-      url: joinProviderUrl(config.baseUrl, '/api/v3', `/contents/generations/tasks/${taskId}`),
+      url: joinProviderUrl(config.baseUrl, this.apiPrefix, `/contents/generations/tasks/${taskId}`),
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,

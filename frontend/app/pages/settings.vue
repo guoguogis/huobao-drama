@@ -734,7 +734,7 @@ const serviceTypes = computed(() => [
   { type: 'image', label: t('common.serviceType.image') },
   { type: 'video', label: t('common.serviceType.video') },
 ])
-const providers = ['gemini', 'openai', 'volcengine', 'minimax', 'aliyun']
+const providers = ['gemini', 'openai', 'volcengine', 'volcengine-plan', 'minimax', 'aliyun']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
 const serviceMeta = computed(() => ({
   text: { label: t('common.serviceType.text'), desc: t('settings.ai.meta.text') },
@@ -749,10 +749,18 @@ const providerPresets = {
   image: {
     gemini: { label: 'Gemini 官方', baseUrl: 'https://generativelanguage.googleapis.com', models: ['gemini-3-pro-image', 'gemini-3.1-flash-image'] },
     openai: { label: 'OpenAI 官方', baseUrl: 'https://api.openai.com', models: ['gpt-image-2'] },
+    // 注：AgentPlan 的图片通道未提供预置模板——settings 页有「不得出现 doubao-seedream」的
+    // 结构测试约束。图片链路本身可用：provider 选 volcengine-plan 后手填 base_url 与模型，
+    // 不填模型时适配器回退到内置默认模型。
   },
   video: {
     aliyun: { label: '阿里云百炼 Wan 3.0', baseUrl: 'https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com', models: ['wan3.0-video', 'wan3.0-video-prime'] },
+    // 同一 provider 只保留一个预置：走 TokenPlan 套餐时把 base_url 改成
+    // https://token-plan.{region}.maas.aliyuncs.com（站点根，**不要**带 /compatible-mode/v1，
+    // 那是 OpenAI 兼容的文本通道），模型填 happyhorse-1.1-r2v / -i2v / -t2v。
+    // 注意工作台的视频生成会传分镜绑定的参考图，对应官方语义是 -r2v（参考生视频）。
     volcengine: { label: 'Seedance 2.0 官方', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'] },
+    'volcengine-plan': { label: '火山方舟 AgentPlan 视频', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'] },
     minimax: { label: 'MiniMax H3 官方', baseUrl: 'https://api.minimaxi.com', models: ['MiniMax-H3'] },
   },
 }
@@ -1600,6 +1608,7 @@ onBeforeUnmount(stopUsagePoll)
 .provider-badge[data-provider="openai"] { background: #10a37f; }
 .provider-badge[data-provider="gemini"] { background: #4285f4; }
 .provider-badge[data-provider="volcengine"] { background: #ff5c39; }
+.provider-badge[data-provider="volcengine-plan"] { background: #ff5c39; }
 /* 有厂商图标时用中性底，彩色图标直接展示 */
 .provider-badge.has-icon { background: var(--bg-2); }
 .provider-badge-icon { width: 20px; height: 20px; object-fit: contain; }

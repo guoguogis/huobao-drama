@@ -778,6 +778,7 @@
       "duration": "分镜の長さ",
       "durationUnit": "s（4-15）",
       "durationUnitWan": "秒（2-30）",
+      "durationUnitHappyHorse": "秒（3-15）",
       "durationHint": "変更すると分镜に即時保存され、リストとバッチ生成にも反映されます",
       "effective": "{model} · {res} · {dur}秒",
       "boundRefs": "绑定参照画像",

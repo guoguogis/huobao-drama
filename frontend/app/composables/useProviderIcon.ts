@@ -8,6 +8,7 @@ const FILENAMES: Record<string, string> = {
   openai: 'openai.png',
   gemini: 'gemini-color.png',
   volcengine: 'volcengine-color.png',
+  'volcengine-plan': 'volcengine-color.png',  // AgentPlan 套餐与按量同属火山方舟，共用图标
   minimax: 'minimax-color.png',
   claude: 'claude-color.png',
   deepseek: 'deepseek-color.png',

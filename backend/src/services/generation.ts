@@ -281,7 +281,7 @@ async function processTask(id: number, config: AIConfig) {
 
       if (!isAsync && imageUrl) {
         logTaskProgress(label, 'sync-complete', { id, imageUrl })
-        await handleImageComplete(record, imageUrl)
+        await completeWithRetry(label, id, '下载图片', imageUrl, () => handleImageComplete(record, imageUrl))
         return
       }
 
@@ -290,7 +290,7 @@ async function processTask(id: number, config: AIConfig) {
         const b64 = adapter.extractImageBase64(result)
         if (b64) {
           logTaskProgress(label, 'sync-base64-complete', { id, mimeType: b64.mimeType })
-          await handleImageCompleteBase64(record, b64.data, b64.mimeType)
+          await completeWithRetry(label, id, '保存图片', '', () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
           return
         }
         throw new Error('No image URL or base64 data in response')
@@ -306,7 +306,7 @@ async function processTask(id: number, config: AIConfig) {
 
     if (!isAsync && videoUrl) {
       logTaskProgress(label, 'sync-complete', { id, videoUrl })
-      await handleVideoComplete(record, videoUrl, params.duration)
+      await completeWithRetry(label, id, '下载视频', videoUrl, () => handleVideoComplete(record, videoUrl, params.duration))
       return
     }
 
@@ -329,6 +329,64 @@ async function failTask(id: number, message: string) {
   await db.update(schema.sysTask)
     .set({ status: 'failed', errorMsg: message, updatedAt: now() })
     .where(eq(schema.sysTask.id, id))
+}
+
+/**
+ * 上游宣告「已完成」之后的下载/落盘阶段：独立重试并在原地终结。
+ *
+ * 必须与轮询循环隔离——这一段的失败（典型情形是对方返回了本机不可达的下载地址）
+ * 若抛回 pollTask 的 catch，会被误当成「轮询失败」而继续轮询，拿同一个 URL 反复失败
+ * 到 attempts 耗尽（视频档位 300 次 × 10s ≈ 50 分钟），日志里也只剩一句无上下文的
+ * fetch failed，看不出失败发生在下载而非轮询。
+ */
+const COMPLETE_ATTEMPTS = 3
+
+async function completeWithRetry(
+  label: string,
+  taskId: number,
+  what: string,
+  targetUrl: string,
+  work: () => Promise<void>,
+) {
+  for (let attempt = 1; attempt <= COMPLETE_ATTEMPTS; attempt++) {
+    try {
+      await work()
+      return
+    } catch (err: any) {
+      const detail = describeFetchError(err)
+      if (attempt === COMPLETE_ATTEMPTS) {
+        const where = targetUrl ? `${targetUrl} —— ` : ''
+        await failTask(taskId, `上游已生成完成，但${what}失败（重试 ${COMPLETE_ATTEMPTS} 次后放弃）：${where}${detail}`)
+        return
+      }
+      logTaskWarn(label, 'complete-retry', { id: taskId, what, attempt, error: detail })
+      await new Promise(r => setTimeout(r, 2000 * attempt))
+    }
+  }
+}
+
+/** Node fetch 的网络错误正文只有一句 "fetch failed"，必须把底层 cause 带出来才可排查 */
+function describeFetchError(err: any): string {
+  const cause = err?.cause
+  const code = cause?.code || err?.code
+  const detail = cause?.message || err?.message || String(err)
+  return code ? `${detail} (${code})` : detail
+}
+
+/**
+ * 把上游响应形状附进失败原因。
+ * 任务日志只写 stdout，用户看不到；写进 error_msg 才能在界面上直接看到「到底返回了什么」，
+ * 免除「轮询到超时却不知道发生了什么」的排查成本。base64 之类的大字段由截断兜住。
+ */
+function describeResponseShape(result: unknown) {
+  try {
+    const json = JSON.stringify(result) ?? String(result)
+    const keys = result && typeof result === 'object' ? Object.keys(result).join(', ') : ''
+    const body = json.length > 300 ? `${json.slice(0, 300)}…` : json
+    return `（响应字段: ${keys || '无'}；原文: ${body}）`
+  } catch {
+    return ''
+  }
 }
 
 type SysTaskRecord = typeof schema.sysTask.$inferSelect
@@ -373,24 +431,28 @@ async function pollTask(record: SysTaskRecord, config: AIConfig, taskId: string)
       if (pollResp.status === 'completed') {
         if (type === 'image') {
           if (pollResp.imageUrl) {
-            logTaskSuccess(label, 'poll-complete', { id: record.id, taskId, imageUrl: pollResp.imageUrl })
-            await handleImageComplete(record, pollResp.imageUrl)
+            logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, imageUrl: pollResp.imageUrl })
+            await completeWithRetry(label, record.id, '下载图片', pollResp.imageUrl, () => handleImageComplete(record, pollResp.imageUrl!))
             return
           }
-          if (adapter.provider === 'gemini') {
-            // Gemini 可能返回 base64
-            const b64 = (adapter as ReturnType<typeof getImageAdapter>).extractImageBase64(result)
-            if (b64) {
-              logTaskSuccess(label, 'poll-base64-complete', { id: record.id, taskId, mimeType: b64.mimeType })
-              await handleImageCompleteBase64(record, b64.data, b64.mimeType)
-              return
-            }
+          // 有的厂商只回 base64（Gemini）；extractImageBase64 对其他适配器返回 null
+          const b64 = (adapter as ReturnType<typeof getImageAdapter>).extractImageBase64(result)
+          if (b64) {
+            logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, mimeType: b64.mimeType })
+            await completeWithRetry(label, record.id, '保存图片', '', () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
+            return
           }
-        } else if (pollResp.videoUrl) {
-          logTaskSuccess(label, 'poll-complete', { id: record.id, taskId, videoUrl: pollResp.videoUrl })
-          await handleVideoComplete(record, pollResp.videoUrl, pollResp.duration)
+          // 上游已宣告完成却给不出图片：继续轮询只会白等到超时，且最终错误指向「超时」而非真因
+          await failTask(record.id, `上游返回已完成但未提供图片地址${describeResponseShape(result)}`)
           return
         }
+        if (pollResp.videoUrl) {
+          logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, videoUrl: pollResp.videoUrl })
+          await completeWithRetry(label, record.id, '下载视频', pollResp.videoUrl, () => handleVideoComplete(record, pollResp.videoUrl!, pollResp.duration))
+          return
+        }
+        await failTask(record.id, `上游返回已完成但未提供视频地址${describeResponseShape(result)}`)
+        return
       }
       if (pollResp.status === 'failed') {
         // 上游明确失败（如内容审核拦截）属终态：立即落库，不重试不等待超时

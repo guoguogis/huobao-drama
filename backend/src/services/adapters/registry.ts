@@ -7,7 +7,8 @@ import { GeminiImageAdapter } from './gemini-image'
 import { VolcEngineImageAdapter } from './volcengine-image'
 import { VolcEngineVideoAdapter } from './volcengine-video'
 import { MiniMaxVideoAdapter } from './minimax-video'
-import { AliyunWanVideoAdapter } from './aliyun-wan-video'
+import { AliyunVideoAdapter } from './aliyun-video'
+import { VOLCENGINE_PLAN_API_PREFIX, VOLCENGINE_PLAN_PROVIDER } from './volcengine-endpoints'
 import type { ImageProviderAdapter, VideoProviderAdapter } from './types'
 
 // 图片 Adapter 注册表
@@ -15,13 +16,16 @@ export const imageAdapters: Record<string, ImageProviderAdapter> = {
   openai: new OpenAIImageAdapter(),
   gemini: new GeminiImageAdapter(),
   volcengine: new VolcEngineImageAdapter(),
+  // AgentPlan 套餐通道：同报文，前缀换成 /api/plan/v3，避免误走按量计费
+  [VOLCENGINE_PLAN_PROVIDER]: new VolcEngineImageAdapter(VOLCENGINE_PLAN_PROVIDER, VOLCENGINE_PLAN_API_PREFIX),
 }
 
 // 视频 Adapter 注册表
 export const videoAdapters: Record<string, VideoProviderAdapter> = {
   volcengine: new VolcEngineVideoAdapter(),
+  [VOLCENGINE_PLAN_PROVIDER]: new VolcEngineVideoAdapter(VOLCENGINE_PLAN_PROVIDER, VOLCENGINE_PLAN_API_PREFIX),
   minimax: new MiniMaxVideoAdapter(),
-  aliyun: new AliyunWanVideoAdapter(),
+  aliyun: new AliyunVideoAdapter(),
 }
 
 /**

@@ -56,9 +56,10 @@ test('backend rejects unsupported providers at DB and route boundaries', () => {
   const route = read('src/routes/aiConfigs.ts')
 
   assert.match(ai, /officialProviders/)
-  assert.match(ai, /text:\s*\[\s*'openai',\s*'gemini',\s*'volcengine'\s*\]/)
-  assert.match(ai, /image:\s*\[\s*'openai',\s*'gemini',\s*'volcengine'\s*\]/)
-  assert.match(ai, /video:\s*\[\s*'volcengine',\s*'minimax',\s*'aliyun'\s*\]/)
+  // 火山方舟按量（volcengine）与 AgentPlan 套餐（volcengine-plan）是两个独立 provider
+  assert.match(ai, /text:\s*\[\s*'openai',\s*'gemini',\s*'volcengine',\s*VOLCENGINE_PLAN_PROVIDER\s*\]/)
+  assert.match(ai, /image:\s*\[\s*'openai',\s*'gemini',\s*'volcengine',\s*VOLCENGINE_PLAN_PROVIDER\s*\]/)
+  assert.match(ai, /video:\s*\[\s*'volcengine',\s*VOLCENGINE_PLAN_PROVIDER,\s*'minimax',\s*'aliyun'\s*\]/)
   assert.doesNotMatch(ai, /'deepseek'/)
   assert.doesNotMatch(ai, /'ali'/)
   assert.doesNotMatch(ai, /'vidu'/)
@@ -116,7 +117,9 @@ test('AI config probe uses provider-specific auth schemes', () => {
   assert.match(route, /url\.searchParams\.set\('key', apiKey\)/)
   assert.match(route, /function bearerHeaders/)
   assert.match(route, /p === 'openai'/)
-  assert.match(route, /p === 'volcengine'/)
+  // 火山引擎系（按量 + AgentPlan 套餐）走同一分支，由前缀助手区分 /api/v3 与 /api/plan/v3
+  assert.match(route, /isVolcengineProvider\(p\)/)
+  assert.match(route, /volcengineApiPrefix\(p\)/)
   assert.match(route, /p === 'minimax'/)
   assert.match(route, /p === 'aliyun'/)
   assert.match(route, /X-DashScope-Async': 'enable'/)
@@ -170,7 +173,7 @@ test('new image and video models use their current API shapes', () => {
   const openaiImage = read('src/services/adapters/openai-image.ts')
   const geminiImage = read('src/services/adapters/gemini-image.ts')
   const volcVideo = read('src/services/adapters/volcengine-video.ts')
-  const wanVideo = read('src/services/adapters/aliyun-wan-video.ts')
+  const wanVideo = read('src/services/adapters/aliyun-video.ts')
 
   assert.match(openaiImage, /isGptImage2/)
   assert.match(openaiImage, /normalizeGptImage2Size/)
@@ -185,9 +188,13 @@ test('new image and video models use their current API shapes', () => {
   assert.match(volcVideo, /reference_video/)
   assert.match(volcVideo, /reference_audio/)
   assert.match(volcVideo, /generate_audio:\s*record\.generateAudio/)
-  // Wan 3.0 使用阿里云百炼官方异步视频生成协议
+  // 阿里云百炼使用官方异步视频生成协议（Wan 3.0 与 HappyHorse 共用同一信封）
   assert.match(wanVideo, /wan3\.0-video-prime/)
   assert.match(wanVideo, /wan3\.0-video/)
+  // HappyHorse 族（TokenPlan 默认视频模型）
+  assert.match(wanVideo, /happyhorse-1\.1-t2v/)
+  assert.match(wanVideo, /happyhorse-1\.1-r2v/)
+  assert.match(wanVideo, /happyhorse-1\.1-i2v/)
   assert.match(wanVideo, /\/services\/aigc\/video-generation\/video-synthesis/)
   assert.match(wanVideo, /X-DashScope-Async': 'enable'/)
   assert.match(wanVideo, /body:\s*\{ model, input, parameters \}/)
