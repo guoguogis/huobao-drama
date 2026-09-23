@@ -9,6 +9,7 @@ import { now } from '../utils/response.js'
 import { downloadFile, fetchImageAsCompressedDataUrl, generateImageThumb, readImageAsCompressedDataUrl, saveBase64Image } from '../utils/storage.js'
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { getImageAdapter, getVideoAdapter } from './adapters/registry'
+import { buildDownloadCandidates, downloadAuthHeaders } from './adapters/url'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 
@@ -281,7 +282,7 @@ async function processTask(id: number, config: AIConfig) {
 
       if (!isAsync && imageUrl) {
         logTaskProgress(label, 'sync-complete', { id, imageUrl })
-        await completeWithRetry(label, id, '下载图片', imageUrl, () => handleImageComplete(record, imageUrl))
+        await completeWithRetry(label, id, '下载图片', buildDownloadCandidates(imageUrl, config.baseUrl), (url) => handleImageComplete(record, url, downloadAuthHeaders(url, config.baseUrl, config.apiKey)))
         return
       }
 
@@ -290,7 +291,7 @@ async function processTask(id: number, config: AIConfig) {
         const b64 = adapter.extractImageBase64(result)
         if (b64) {
           logTaskProgress(label, 'sync-base64-complete', { id, mimeType: b64.mimeType })
-          await completeWithRetry(label, id, '保存图片', '', () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
+          await completeWithRetry(label, id, '保存图片', [''], () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
           return
         }
         throw new Error('No image URL or base64 data in response')
@@ -306,7 +307,7 @@ async function processTask(id: number, config: AIConfig) {
 
     if (!isAsync && videoUrl) {
       logTaskProgress(label, 'sync-complete', { id, videoUrl })
-      await completeWithRetry(label, id, '下载视频', videoUrl, () => handleVideoComplete(record, videoUrl, params.duration))
+      await completeWithRetry(label, id, '下载视频', buildDownloadCandidates(videoUrl, config.baseUrl), (url) => handleVideoComplete(record, url, params.duration, downloadAuthHeaders(url, config.baseUrl, config.apiKey)))
       return
     }
 
@@ -332,12 +333,15 @@ async function failTask(id: number, message: string) {
 }
 
 /**
- * 上游宣告「已完成」之后的下载/落盘阶段：独立重试并在原地终结。
+ * 上游宣告「已完成」之后的下载/落盘阶段：按候选地址轮次重试，并在原地终结。
  *
- * 必须与轮询循环隔离——这一段的失败（典型情形是对方返回了本机不可达的下载地址）
- * 若抛回 pollTask 的 catch，会被误当成「轮询失败」而继续轮询，拿同一个 URL 反复失败
- * 到 attempts 耗尽（视频档位 300 次 × 10s ≈ 50 分钟），日志里也只剩一句无上下文的
- * fetch failed，看不出失败发生在下载而非轮询。
+ * 两个要点：
+ * 1. 必须与轮询循环隔离——这一段的失败（典型情形是对方返回了本机不可达的下载地址）
+ *    若抛回 pollTask 的 catch，会被误当成「轮询失败」而继续轮询，拿同一个 URL 反复失败
+ *    到 attempts 耗尽（视频档位 300 次 × 10s ≈ 50 分钟），日志里也只剩一句无上下文的
+ *    fetch failed，看不出失败发生在下载而非轮询。
+ * 2. 候选地址含「换成生成任务 base_url origin」的回退项（见 buildDownloadCandidates）。
+ *    轮次在外层、候选在内层：原始地址一失败就立刻试回退地址，不必等它重试满 3 次。
  */
 const COMPLETE_ATTEMPTS = 3
 
@@ -345,24 +349,38 @@ async function completeWithRetry(
   label: string,
   taskId: number,
   what: string,
-  targetUrl: string,
-  work: () => Promise<void>,
+  candidates: string[],
+  work: (url: string) => Promise<void>,
 ) {
+  const tried = new Set<string>()
+  let lastDetail = ''
+
   for (let attempt = 1; attempt <= COMPLETE_ATTEMPTS; attempt++) {
-    try {
-      await work()
-      return
-    } catch (err: any) {
-      const detail = describeFetchError(err)
-      if (attempt === COMPLETE_ATTEMPTS) {
-        const where = targetUrl ? `${targetUrl} —— ` : ''
-        await failTask(taskId, `上游已生成完成，但${what}失败（重试 ${COMPLETE_ATTEMPTS} 次后放弃）：${where}${detail}`)
+    for (let c = 0; c < candidates.length; c++) {
+      const url = candidates[c]
+      tried.add(url)
+      try {
+        await work(url)
         return
+      } catch (err: any) {
+        lastDetail = describeFetchError(err)
+        const next = candidates[c + 1]
+        if (next) {
+          logTaskWarn(label, 'complete-fallback', { id: taskId, what, failed: url, error: lastDetail, next })
+        } else if (attempt < COMPLETE_ATTEMPTS) {
+          logTaskWarn(label, 'complete-retry', { id: taskId, what, attempt, url, error: lastDetail })
+        }
       }
-      logTaskWarn(label, 'complete-retry', { id: taskId, what, attempt, error: detail })
-      await new Promise(r => setTimeout(r, 2000 * attempt))
     }
+    if (attempt < COMPLETE_ATTEMPTS) await new Promise(r => setTimeout(r, 2000 * attempt))
   }
+
+  const where = [...tried].filter(Boolean)
+  await failTask(
+    taskId,
+    `上游已生成完成，但${what}失败（${COMPLETE_ATTEMPTS} 轮重试后放弃）：${lastDetail}`
+    + `${where.length ? `；已尝试：${where.join(' , ')}` : ''}`,
+  )
 }
 
 /** Node fetch 的网络错误正文只有一句 "fetch failed"，必须把底层 cause 带出来才可排查 */
@@ -432,14 +450,14 @@ async function pollTask(record: SysTaskRecord, config: AIConfig, taskId: string)
         if (type === 'image') {
           if (pollResp.imageUrl) {
             logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, imageUrl: pollResp.imageUrl })
-            await completeWithRetry(label, record.id, '下载图片', pollResp.imageUrl, () => handleImageComplete(record, pollResp.imageUrl!))
+            await completeWithRetry(label, record.id, '下载图片', buildDownloadCandidates(pollResp.imageUrl, config.baseUrl), (url) => handleImageComplete(record, url, downloadAuthHeaders(url, config.baseUrl, config.apiKey)))
             return
           }
           // 有的厂商只回 base64（Gemini）；extractImageBase64 对其他适配器返回 null
           const b64 = (adapter as ReturnType<typeof getImageAdapter>).extractImageBase64(result)
           if (b64) {
             logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, mimeType: b64.mimeType })
-            await completeWithRetry(label, record.id, '保存图片', '', () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
+            await completeWithRetry(label, record.id, '保存图片', [''], () => handleImageCompleteBase64(record, b64.data, b64.mimeType))
             return
           }
           // 上游已宣告完成却给不出图片：继续轮询只会白等到超时，且最终错误指向「超时」而非真因
@@ -448,7 +466,7 @@ async function pollTask(record: SysTaskRecord, config: AIConfig, taskId: string)
         }
         if (pollResp.videoUrl) {
           logTaskProgress(label, 'poll-reported-complete', { id: record.id, taskId, videoUrl: pollResp.videoUrl })
-          await completeWithRetry(label, record.id, '下载视频', pollResp.videoUrl, () => handleVideoComplete(record, pollResp.videoUrl!, pollResp.duration))
+          await completeWithRetry(label, record.id, '下载视频', buildDownloadCandidates(pollResp.videoUrl, config.baseUrl), (url) => handleVideoComplete(record, url, pollResp.duration, downloadAuthHeaders(url, config.baseUrl, config.apiKey)))
           return
         }
         await failTask(record.id, `上游返回已完成但未提供视频地址${describeResponseShape(result)}`)
@@ -472,8 +490,8 @@ async function pollTask(record: SysTaskRecord, config: AIConfig, taskId: string)
   await failTask(record.id, 'Timeout: polling attempts exhausted')
 }
 
-async function handleImageComplete(record: SysTaskRecord, imageUrl: string) {
-  const localPath = await downloadFile(imageUrl, 'images')
+async function handleImageComplete(record: SysTaskRecord, imageUrl: string, headers: Record<string, string> = {}) {
+  const localPath = await downloadFile(imageUrl, 'images', headers)
   // 列表页缩略图（前端按命名约定推导地址，失败不影响主流程）
   await generateImageThumb(localPath)
 
@@ -520,8 +538,8 @@ async function writeBackImageAssets(record: SysTaskRecord, localPath: string) {
   }
 }
 
-async function handleVideoComplete(record: SysTaskRecord, videoUrl: string, duration: number | null | undefined) {
-  const localPath = await downloadFile(videoUrl, 'videos')
+async function handleVideoComplete(record: SysTaskRecord, videoUrl: string, duration: number | null | undefined, headers: Record<string, string> = {}) {
+  const localPath = await downloadFile(videoUrl, 'videos', headers)
   // 海报帧供列表/封面展示，避免前端为显示首帧缓冲整个视频
   await extractVideoPoster(localPath)
   await db.update(schema.sysTask)

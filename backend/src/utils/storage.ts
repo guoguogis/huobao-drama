@@ -12,23 +12,65 @@ const DOWNLOAD_TIMEOUT_MS = 300_000
 
 /**
  * 下载远程文件到本地存储
+ *
+ * 扩展名不能只看 URL：部分网关返回的下载地址没有后缀（如 /v2/video_generation/<id>/download），
+ * 落成 .bin 后静态服务会按 application/octet-stream 下发，浏览器直接拒绝播放。
+ * 依次尝试 URL 后缀 → 响应 Content-Type → 魔数嗅探。
  */
-export async function downloadFile(url: string, subDir: string): Promise<string> {
+export async function downloadFile(
+  url: string,
+  subDir: string,
+  headers: Record<string, string> = {},
+): Promise<string> {
   const dir = path.join(STORAGE_ROOT, subDir)
   fs.mkdirSync(dir, { recursive: true })
 
-  const ext = getExtFromUrl(url)
-  const filename = `${uuid()}${ext}`
-  const filePath = path.join(dir, filename)
-
-  const resp = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
+  const resp = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+  })
   if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
 
   const buffer = Buffer.from(await resp.arrayBuffer())
+  const filename = `${uuid()}${resolveDownloadExt(url, resp.headers.get('content-type'), buffer)}`
+  const filePath = path.join(dir, filename)
   fs.writeFileSync(filePath, buffer)
 
   // 返回相对路径（供 API 返回给前端）
   return `static/${subDir}/${filename}`
+}
+
+/** 下载响应的 Content-Type → 扩展名（覆盖生成产物会用到的媒体类型） */
+const DOWNLOAD_MIME_EXT: Record<string, string> = {
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+}
+
+function resolveDownloadExt(url: string, contentType: string | null, buffer: Buffer): string {
+  const fromUrl = getExtFromUrl(url)
+  if (fromUrl) return fromUrl
+
+  const mime = (contentType || '').split(';')[0].trim().toLowerCase()
+  if (DOWNLOAD_MIME_EXT[mime]) return DOWNLOAD_MIME_EXT[mime]
+
+  return sniffExt(buffer) || '.bin'
+}
+
+/** 魔数嗅探：Content-Type 缺失或被网关统一写成 octet-stream 时兜底 */
+function sniffExt(buffer: Buffer): string | null {
+  const head = buffer.subarray(0, 16)
+  if (head.length >= 12 && head.subarray(4, 8).toString('latin1') === 'ftyp') return '.mp4'
+  if (head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return '.webm'
+  if (head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return '.png'
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return '.jpg'
+  if (head.length >= 12 && head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP') return '.webp'
+  if (head.length >= 6 && head.subarray(0, 6).toString('latin1').startsWith('GIF8')) return '.gif'
+  return null
 }
 
 /**
@@ -46,13 +88,14 @@ export async function saveUploadedFile(data: ArrayBuffer, subDir: string, origin
   return `static/${subDir}/${filename}`
 }
 
+/** URL 路径里的扩展名；取不到时返回空串，交由 resolveDownloadExt 继续判断 */
 function getExtFromUrl(url: string): string {
   try {
     const pathname = new URL(url).pathname
     const ext = path.extname(pathname)
     if (ext && ext.length <= 5) return ext
   } catch {}
-  return '.bin'
+  return ''
 }
 
 /**
