@@ -1,4 +1,16 @@
+import { useAuth } from './useAuth'
+
 const BASE = '/api/v1'
+
+/**
+ * 会话失效统一收口：401 → 清登录态并整页回登录页。
+ * 只排除登录接口自身 —— 口令错误本身即 401，若也跳转就会变成死循环。
+ */
+function handleUnauthorized(status: number, path: string) {
+  if (status !== 401) return
+  if (path.startsWith('/auth/login')) return
+  useAuth().handleSessionExpired()
+}
 
 async function req<T = any>(method: string, path: string, body?: any): Promise<T> {
   const opts: RequestInit = { method, headers: { 'Content-Type': 'application/json' } }
@@ -14,6 +26,7 @@ async function req<T = any>(method: string, path: string, body?: any): Promise<T
 
     if (!resp.ok || (json.code && json.code >= 400)) {
       console.log(`%c[API] %c${method} ${path} %c${resp.status} %c${ms}ms`, 'color:#888', 'color:#ef5350', 'color:#ef5350;font-weight:bold', 'color:#888', json.message || '')
+      handleUnauthorized(resp.status, path)
       throw new Error(json.message || `${resp.status}`)
     }
 
@@ -113,6 +126,7 @@ async function uploadReq<T = any>(path: string, file: File): Promise<T> {
   const json = await resp.json()
   if (!resp.ok || (json.code && json.code >= 400)) {
     console.log(`%c[API] %cPOST ${path} %c${resp.status}`, 'color:#888', 'color:#ef5350', 'color:#ef5350;font-weight:bold')
+    handleUnauthorized(resp.status, path)
     throw new Error(json.message || `${resp.status}`)
   }
   return json.data ?? json
@@ -168,6 +182,14 @@ export const storageAPI = {
 export const settingsAPI = {
   contentLanguage: () => api.get<{ language: string }>('/settings/content-language'),
   setContentLanguage: (language: string) => api.put('/settings/content-language', { language }),
+}
+
+// 登录接口单独放在 useAuth（登录失败本身就是 401，不能走 useApi 的失效跳转）
+export const authAPI = {
+  session: () => api.get<{ authenticated: boolean; username?: string }>('/auth/session'),
+  logout: () => api.post('/auth/logout'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put('/auth/password', { current_password: currentPassword, new_password: newPassword }),
 }
 
 // 服务器/Docker 部署的版本检查与更新（桌面版走 useDesktopBridge，不用此 API）

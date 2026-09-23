@@ -6,10 +6,18 @@ import { db, getInsertId, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { getActiveConfig, getConfigById } from './ai.js'
 import { now } from '../utils/response.js'
-import { downloadFile, fetchImageAsCompressedDataUrl, generateImageThumb, readImageAsCompressedDataUrl, saveBase64Image } from '../utils/storage.js'
+import { downloadFile, fetchImageAsCompressedDataUrl, generateImageThumb, getAbsolutePath, readImageAsCompressedDataUrl, saveBase64Image } from '../utils/storage.js'
+import { probeDurationSeconds } from '../utils/media-probe.js'
+import {
+  AUDIO_TOTAL_MAX_SECONDS,
+  REQUEST_BODY_MAX_BYTES,
+  audioMaxClipsFor,
+  formatSeconds,
+} from '../utils/audio-limits.js'
 import { extractVideoPoster } from '../utils/video-poster.js'
 import { getImageAdapter, getVideoAdapter } from './adapters/registry'
 import { buildDownloadCandidates, downloadAuthHeaders } from './adapters/url'
+import { resolveMediaRef, resolveMediaRefs, resolveOptionalMediaRefs } from './media-ref.js'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 
@@ -49,6 +57,8 @@ interface GenerateVideoParams {
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** 角色音色样本（按分镜绑定角色收集）。可选增强：解析不出公网 URL 时跳过并告警，不让整个任务失败 */
+  characterVoiceUrls?: string[]
   referenceFileUrl?: string
   referenceLinkUrl?: string
   generateAudio?: boolean
@@ -119,6 +129,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     referenceImageUrls: params.referenceImageUrls,
     referenceVideoUrls: params.referenceVideoUrls,
     referenceAudioUrls: params.referenceAudioUrls,
+    characterVoiceUrls: params.characterVoiceUrls,
     referenceFileUrl: params.referenceFileUrl,
     referenceLinkUrl: params.referenceLinkUrl,
     generateAudio: params.generateAudio === false ? 0 : 1,
@@ -223,10 +234,14 @@ async function processTask(id: number, config: AIConfig) {
       const resolvedFirstFrameUrl = await normalizeVideoReferenceUrl(params.firstFrameUrl)
       const resolvedLastFrameUrl = await normalizeVideoReferenceUrl(params.lastFrameUrl)
       const resolvedReferenceImageUrls = await normalizeVideoReferenceUrls(params.referenceImageUrls)
-      // 参考视频/音频文件较大，不适合 dataURL 内联，需解析为公网可访问 URL
-      const resolvedReferenceVideoUrls = resolvePublicMediaUrls(params.referenceVideoUrls, 'video')
-      const resolvedReferenceAudioUrls = resolvePublicMediaUrls(params.referenceAudioUrls, 'audio')
-      const resolvedReferenceFileUrl = resolvePublicMediaUrl(params.referenceFileUrl, 'file')
+      // 参考视频/音频体积大，不适合 dataURL 内联：本地联调内联、服务器部署签名为公网 URL
+      const resolvedReferenceVideoUrls = resolveMediaRefs(params.referenceVideoUrls, 'video', record.id)
+      const resolvedReferenceAudioUrls = resolveMediaRefs(params.referenceAudioUrls, 'audio', record.id)
+      // 角色音色是可选增强：解析不出来的样本跳过，回退「模型自己配音」，不拖垮整个任务
+      const resolvedVoiceUrls = resolveOptionalMediaRefs(params.characterVoiceUrls, 'audio', record.id)
+      const mergedAudioUrls = Array.from(new Set([...resolvedReferenceAudioUrls, ...resolvedVoiceUrls]))
+      await assertAudioRefsWithinLimits(params, mergedAudioUrls, record.id, record.model)
+      const resolvedReferenceFileUrl = resolveMediaRef(params.referenceFileUrl, 'file', record.id)
       ;({ url, method, headers, body } = adapter.buildGenerateRequest(config, {
         id: record.id,
         model: record.model,
@@ -237,7 +252,7 @@ async function processTask(id: number, config: AIConfig) {
         lastFrameUrl: resolvedLastFrameUrl,
         referenceImageUrls: resolvedReferenceImageUrls.length ? JSON.stringify(resolvedReferenceImageUrls) : null,
         referenceVideoUrls: resolvedReferenceVideoUrls.length ? JSON.stringify(resolvedReferenceVideoUrls) : null,
-        referenceAudioUrls: resolvedReferenceAudioUrls.length ? JSON.stringify(resolvedReferenceAudioUrls) : null,
+        referenceAudioUrls: mergedAudioUrls.length ? JSON.stringify(mergedAudioUrls) : null,
         referenceFileUrl: resolvedReferenceFileUrl,
         referenceLinkUrl: params.referenceLinkUrl,
         generateAudio: params.generateAudio,
@@ -259,6 +274,18 @@ async function processTask(id: number, config: AIConfig) {
     })
 
     const isMultipart = body instanceof FormData
+    // 内联 Base64 极易把请求体撑大（膨胀约 1.33 倍）：自己先拦，别让上游回一个难懂的 413
+    const serializedBody = isMultipart ? null : JSON.stringify(body)
+    if (serializedBody) {
+      const bytes = Buffer.byteLength(serializedBody)
+      if (bytes > REQUEST_BODY_MAX_BYTES) {
+        throw new Error(
+          `请求体 ${(bytes / 1024 / 1024).toFixed(1)}MB 超过上游上限 ${Math.round(REQUEST_BODY_MAX_BYTES / 1024 / 1024)}MB；` +
+          `请减少参考素材，或配置 PUBLIC_BASE_URL 让本地素材改用公网 URL（不再内联）`,
+        )
+      }
+    }
+
     logTaskPayload(label, 'request payload', {
       id, method, url, headers,
       // multipart 表单（如 OpenAI /v1/images/edits）无法 JSON 化，记录字段摘要
@@ -268,7 +295,7 @@ async function processTask(id: number, config: AIConfig) {
     const resp = await fetch(url, {
       method,
       headers,
-      body: isMultipart ? (body as FormData) : JSON.stringify(body),
+      body: isMultipart ? (body as FormData) : serializedBody!,
       signal: AbortSignal.timeout(600_000),
     })
 
@@ -631,33 +658,59 @@ async function normalizeVideoReferenceUrls(refs: string[] | null | undefined): P
 }
 
 /**
- * 将参考视频/音频解析为 Seedance API 可访问的 URL。
- * http(s)/dataURL 直通；本地 static 路径需要 PUBLIC_BASE_URL 拼成公网地址，
- * 未配置时抛出可操作的中文错误（落入 catch 写入 error_msg 供前端展示）。
+ * 参考音频限制校验：段数 + 总时长。
+ *
+ * 段数按**已解析**的列表判定（解析阶段可能已丢弃解析不出的音色样本），上限按模型取
+ * （Seedance 3 / Wan 5）。
+ * 总时长只对本地 static 样本探测（远端 URL 探不到）；测不出时长的样本告警但不阻断——
+ * 上游自己会校验，不该把一个可选素材变成硬失败；但只要**已知部分**已超额就直接失败。
  */
-function resolvePublicMediaUrl(value: string | null | undefined, kind: 'video' | 'audio' | 'file'): string | null {
-  const raw = String(value || '').trim()
-  if (!raw) return null
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw
-  if (raw.startsWith('static/') || raw.startsWith('/static/')) {
-    const base = (process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
-    if (!base) {
-      const label = kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '文件'
-      throw new Error(
-        `参考${label}为本地路径 ${raw}，但后端未配置 PUBLIC_BASE_URL，上游视频生成 API 无法访问内网地址。` +
-        `请在 backend/.env 配置 PUBLIC_BASE_URL（如 https://your-domain.com）后重试，或改用公网 URL。`,
-      )
-    }
-    const p = raw.startsWith('/') ? raw : `/${raw}`
-    return `${base}${p}`
+async function assertAudioRefsWithinLimits(
+  params: Record<string, any>,
+  resolvedAudioUrls: string[],
+  taskId: number,
+  model: string | null | undefined,
+): Promise<void> {
+  const maxClips = audioMaxClipsFor(model)
+  if (resolvedAudioUrls.length > maxClips) {
+    const own = (params.referenceAudioUrls ?? []).length
+    const voice = (params.characterVoiceUrls ?? []).length
+    throw new Error(
+      `${model || '当前模型'} 一次最多带 ${maxClips} 段参考音频，当前 ${resolvedAudioUrls.length} 段` +
+      `（分镜自带 ${own} 段 + 角色音色样本 ${voice} 段）。` +
+      `请减少分镜里说话的角色数量，或取消其中几个角色的音色样本`,
+    )
   }
-  return raw
-}
+  if (!resolvedAudioUrls.length) return
 
-function resolvePublicMediaUrls(refs: string[] | null | undefined, kind: 'video' | 'audio'): string[] {
-  if (!Array.isArray(refs) || !refs.length) return []
-  const items = Array.from(new Set(refs.map((item) => String(item || '').trim()).filter(Boolean)))
-  return items.map((item) => resolvePublicMediaUrl(item, kind)).filter((item): item is string => !!item)
+  const localPaths = Array.from(new Set(
+    [...(params.referenceAudioUrls ?? []), ...(params.characterVoiceUrls ?? [])]
+      .map((value: unknown) => String(value ?? '').trim())
+      .filter((value) => value.startsWith('static/') || value.startsWith('/static/')),
+  ))
+
+  let total = 0
+  let unverified = 0
+  for (const relative of localPaths) {
+    const absPath = getAbsolutePath(relative.startsWith('/') ? relative.slice(1) : relative)
+    const duration = await probeDurationSeconds(absPath)
+    if (duration === null) {
+      unverified++
+      logTaskWarn('VideoTask', 'audio-duration-unknown', { id: taskId, path: relative })
+      continue
+    }
+    total += duration
+  }
+
+  if (total > AUDIO_TOTAL_MAX_SECONDS) {
+    throw new Error(
+      `参考音频总时长 ${formatSeconds(total)} 超过 ${AUDIO_TOTAL_MAX_SECONDS} 秒上限` +
+      (unverified ? `（另有 ${unverified} 段未能探测时长）` : ''),
+    )
+  }
+  if (unverified) {
+    logTaskWarn('VideoTask', 'audio-total-unverified', { id: taskId, unverified, knownSeconds: total })
+  }
 }
 
 function normalizeStoredVideoResolution(resolution: string | null | undefined): string | undefined {

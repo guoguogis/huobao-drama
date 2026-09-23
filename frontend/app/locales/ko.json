@@ -3,6 +3,15 @@
     "title": "화바오 숏드라마",
     "updateAvailable": "새 버전 v{version}을 사용할 수 있습니다. 「설정 → 업데이트 정보」에서 업그레이드하세요"
   },
+  "login": {
+    "title": "剧威视频创作平台 로그인",
+    "subtitle": "설정한 API 키와 생성물을 보호하기 위해 로그인이 필요합니다",
+    "username": "계정",
+    "password": "비밀번호",
+    "submit": "로그인",
+    "submitting": "로그인 중...",
+    "failed": "로그인에 실패했습니다. 다시 시도해 주세요"
+  },
   "common": {
     "confirm": "확인",
     "cancel": "취소",
@@ -73,6 +82,11 @@
     },
     "confirmDialog": {
       "title": "삭제 확인"
+    },
+    "accountMenu": {
+      "label": "계정 메뉴",
+      "confirmPassword": "새 비밀번호 확인",
+      "mismatch": "새 비밀번호가 일치하지 않습니다"
     },
     "localeSwitcher": {
       "label": "UI 언어 전환"
@@ -265,14 +279,20 @@
       "langNameKo": "한국어",
       "unifiedSwitchWarning": "{lang}(으)로 전환되었습니다. UI와 AI 콘텐츠 언어가 함께 변경되며 곧 새로고침됩니다…"
     },
+    "account": {
+      "currentUser": "로그인한 계정",
+      "logout": "로그아웃",
+      "changePassword": "비밀번호 변경",
+      "changePasswordNote": "{n}자 이상. 변경하면 다른 기기의 로그인은 즉시 무효화됩니다",
+      "currentPassword": "현재 비밀번호",
+      "newPassword": "새 비밀번호",
+      "save": "저장",
+      "changeSuccess": "비밀번호가 변경되었습니다",
+      "changeFailed": "비밀번호 변경에 실패했습니다"
+    },
     "ai": {
       "title": "AI 서비스 설정",
-      "desc": "먼저 추천 템플릿으로 설정을 만들고, 서비스 유형별로 미세 조정합니다. 워크벤치에서 화를 생성할 때 선택한 이미지·영상 기능이 고정됩니다.",
-      "quickTitle": "화바오 빠른 설정",
-      "recommended": "추천",
-      "quickDesc": "Huobao API Key를 입력하면 텍스트·이미지·영상 세 개의 추천 설정을 한 번에 작성합니다.",
-      "getKey": "api.firemux.com에서 Key 받기",
-      "applyQuick": "화바오 설정 작성",
+      "desc": "서비스 유형별로 템플릿을 선택하거나 provider / base URL / model 을 직접 추가하세요. 워크벤치에서 화를 생성할 때 선택한 이미지·영상 기능이 고정됩니다.",
       "manualTitle": "수동 템플릿",
       "manualDesc": "서비스 유형을 선택하면 추천 `provider / base URL / model`이 템플릿에서 입력됩니다.",
       "activeCount": "{n}개 활성화됨",
@@ -282,8 +302,6 @@
       "setDefault": "이 유형의 기본 모델로 설정",
       "noBaseUrl": "Base URL 미설정",
       "test": "테스트",
-      "apiKeyRequired": "Huobao API Key를 입력하세요",
-      "quickApplied": "화바오 빠른 설정이 작성되었습니다",
       "defaultModelSwitched": "기본 {type} 모델이 {model}(으)로 변경되었습니다",
       "meta": {
         "text": "대본 재작성, 캐릭터·장면 추출, 스토리보드 분해 등 Agent 텍스트 기능",
@@ -614,6 +632,20 @@
       "propSingleImage": "소품 단품 이미지",
       "propImage": "소품 이미지"
     },
+    "voice": {
+      "title": "음성 샘플",
+      "sub": "참조 오디오",
+      "set": "설정됨",
+      "unset": "미설정",
+      "upload": "음성 업로드",
+      "clear": "지우기",
+      "note": "캐릭터마다 고정된 음성 샘플 1개(언제든 교체 가능). \"참조 오디오\"로 영상 생성에 전달되므로 여러 캐릭터가 말하면 여러 개가 되고, 어느 음성이 누구의 것인지 프롬프트에 명시합니다. 제한: mp3 / wav, 1개당 2~10초, 파일당 10MB 이하, 합계 15초 이내, 최대 3개(Wan 3.0은 5개). 초과한 캐릭터는 건너뜁니다. 로컬 개발에서는 Base64로 인라인 전송하고, 배포 후에는 서명된 공개 링크로 전환됩니다.",
+      "limitSkipped": "생성 1회당 음성 샘플은 최대 {clips}개(합계 {seconds}초 이내)입니다. 「{name}」은(는) 건너뛰었습니다. 다른 캐릭터의 음성을 해제하면 자리를 비울 수 있습니다",
+      "uploaded": "「{name}」 음성 샘플을 설정했습니다",
+      "cleared": "음성 샘플을 지웠습니다",
+      "mapping": "음성 참조: {list}. 각 캐릭터의 대사에는 해당 음성을 사용하세요.",
+      "mappingItem": "{index}번째 오디오 = {name}"
+    },
     "create": {
       "title": "{type} 추가",
       "name": "이름",
@@ -888,14 +920,10 @@
       },
       "settings": {
         "title": "1단계 · AI 서비스 설정",
-        "desc": "모든 AI 기능에 사전 설정이 필요합니다. 설정 페이지에서 Huobao API 키를 붙여넣어 텍스트/이미지/영상을 한 번에 설정하세요."
+        "desc": "모든 AI 기능에 사전 설정이 필요합니다. 설정 페이지에서 텍스트·이미지·영상 프로바이더를 추가하세요."
       }
     },
     "settings": {
-      "quick": {
-        "title": "가장 빠른 설정: 빠른 설정",
-        "desc": "Huobao API 키를 붙여넣으면 추천 설정 3종(텍스트/이미지/영상)을 한 번에 등록합니다. 연결 테스트 지원."
-      },
       "nav": {
         "title": "모든 설정이 여기에",
         "desc": "왼쪽에서 섹션 전환: AI 서비스, 일반(UI·생성 언어), 스타일 프리셋, Agent 프롬프트와 스킬, 저장소, 정보."

@@ -38,9 +38,21 @@ test('volcengine video adapter only supports Seedance 2.0 models and reference m
 
 test('video generation service resolves reference media and persists new fields', () => {
   const service = read('src/services/generation.ts')
+  // 参考视频/音频的「上游可访问形式」已抽到 media-ref.ts：
+  // 本地联调内联 Base64，服务器部署拼 PUBLIC_BASE_URL + 签名
+  const mediaRef = read('src/services/media-ref.ts')
 
-  assert.match(service, /PUBLIC_BASE_URL/)
-  assert.match(service, /resolvePublicMediaUrl/)
+  assert.match(service, /from '\.\/media-ref\.js'/)
+  assert.match(service, /resolveMediaRefs\(params\.referenceVideoUrls, 'video', record\.id\)/)
+  assert.match(service, /resolveMediaRefs\(params\.referenceAudioUrls, 'audio', record\.id\)/)
+  // 角色音色是可选增强：解析失败只跳过，不判整条任务失败
+  assert.match(service, /resolveOptionalMediaRefs\(params\.characterVoiceUrls, 'audio', record\.id\)/)
+
+  assert.match(mediaRef, /PUBLIC_BASE_URL/)
+  assert.match(mediaRef, /MEDIA_REF_MODE/)
+  assert.match(mediaRef, /MEDIA_INLINE_MAX_MB/)
+  assert.match(mediaRef, /signMediaPath/)
+
   assert.match(service, /referenceVideoUrls: params\.referenceVideoUrls/)
   assert.match(service, /referenceAudioUrls: params\.referenceAudioUrls/)
   assert.match(service, /generateAudio: params\.generateAudio === false \? 0 : 1/)
@@ -70,13 +82,30 @@ test('video resolution is fixed per episode, editable, and locked into video tas
 
 test('upload route exposes validated video and audio endpoints', () => {
   const route = read('src/routes/upload.ts')
+  // 音频的格式/体积/时长限制是上传侧与生成侧共用的唯一来源
+  const audioLimits = read('src/utils/audio-limits.ts')
 
   assert.match(route, /app\.post\('\/video'/)
   assert.match(route, /app\.post\('\/audio'/)
   assert.match(route, /VIDEO_EXT = new Set\(\['\.mp4', '\.mov', '\.webm', '\.m4v'\]\)/)
-  assert.match(route, /AUDIO_EXT = new Set\(\['\.mp3', '\.wav', '\.m4a', '\.aac'\]\)/)
   assert.match(route, /50 \* 1024 \* 1024/)
-  assert.match(route, /20 \* 1024 \* 1024/)
+
+  // 参考音频仅 mp3 / wav，单文件 ≤10MB，单段 2–10 秒；多个角色说话 → 多段音色（上限按模型）
+  assert.match(audioLimits, /AUDIO_EXT = new Set\(\['\.mp3', '\.wav'\]\)/)
+  assert.match(audioLimits, /AUDIO_MAX_BYTES = 10 \* 1024 \* 1024/)
+  assert.match(audioLimits, /AUDIO_MIN_SECONDS = 2/)
+  assert.match(audioLimits, /AUDIO_MAX_SECONDS = 10/)
+  assert.match(audioLimits, /AUDIO_MAX_CLIPS = 3/)
+  assert.match(audioLimits, /AUDIO_MAX_CLIPS_WAN = 5/)
+  assert.match(audioLimits, /export function audioMaxClipsFor/)
+  assert.match(audioLimits, /REQUEST_BODY_MAX_BYTES = 64 \* 1024 \* 1024/)
+  // 上传侧接上了格式/体积/时长校验，生成侧接上了段数/总量/请求体校验
+  assert.match(route, /probeDurationSeconds\(absPath\)/)
+  assert.match(route, /AUDIO_LIMITS_TEXT/)
+  const service = read('src/services/generation.ts')
+  assert.match(service, /assertAudioRefsWithinLimits/)
+  assert.match(service, /audioMaxClipsFor\(model\)/)
+  assert.match(service, /REQUEST_BODY_MAX_BYTES/)
 })
 
 test('tasks route validates reference-mode requirements for video tasks', () => {

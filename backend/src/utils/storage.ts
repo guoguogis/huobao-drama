@@ -171,6 +171,55 @@ export async function readImageAsCompressedDataUrl(
 }
 
 /**
+ * 参考素材（音频/视频）的 MIME。
+ * 上游对 dataURL 的格式 token 要求小写（方舟：`data:audio/<格式>;base64,`），
+ * 这里用标准 MIME，不做转码——音频重编码会损失音色参考价值。
+ */
+const MEDIA_EXT_MIME: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.m4v': 'video/x-m4v',
+}
+
+export function mediaMimeType(relativePath: string): string {
+  return MEDIA_EXT_MIME[path.extname(relativePath).toLowerCase()] || 'application/octet-stream'
+}
+
+/** 本地素材字节数；文件不存在时抛错（由调用方决定是回退还是报错） */
+export function mediaFileSize(relativePath: string): number {
+  return fs.statSync(getAbsolutePath(relativePath)).size
+}
+
+/**
+ * data URI 的 media type。
+ *
+ * mp3 的格式 token 存在两种写法，两家上游文档都只写作「`data:audio/<格式>`（小写）」，未给出 mp3 的例子：
+ * - `audio/mpeg`：注册 MIME 子类型，符合 RFC 2397，且与图片链路一致
+ *   （本地图一律内联成 `data:image/jpeg`，与源文件扩展名无关，已被方舟接受）
+ * - `audio/mp3`：按扩展名写，贴合「<格式> 小写」的字面表述
+ *
+ * 默认 MIME；若上游对音频回 400 抱怨格式，设 `MEDIA_AUDIO_DATA_URI_FORMAT=extension` 切换，
+ * 无需改代码。
+ */
+function mediaDataUriMediaType(relativePath: string, mime: string): string {
+  if ((process.env.MEDIA_AUDIO_DATA_URI_FORMAT || '').trim().toLowerCase() !== 'extension') return mime
+  const ext = path.extname(relativePath).toLowerCase().replace(/^\./, '')
+  return `${mime.split('/')[0]}/${ext}`
+}
+
+/** 读本地素材并内联为 dataURL。体积上限由调用方（media-ref）把关 */
+export function readMediaAsDataUrl(relativePath: string): string {
+  const buffer = fs.readFileSync(getAbsolutePath(relativePath))
+  const mediaType = mediaDataUriMediaType(relativePath, mediaMimeType(relativePath))
+  return `data:${mediaType};base64,${buffer.toString('base64')}`
+}
+
+/**
  * 下载远程图片并压缩为 data URL（远程参考图归一化，供 multipart/base64 上传类厂商使用）
  */
 export async function fetchImageAsCompressedDataUrl(

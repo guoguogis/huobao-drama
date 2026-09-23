@@ -41,6 +41,7 @@ function normalizeVideoRequest(body: any) {
     reference_image_urls: body.reference_image_urls ?? mediaUrls('reference_image'),
     reference_video_urls: body.reference_video_urls ?? mediaUrls('reference_video'),
     reference_audio_urls: body.reference_audio_urls ?? mediaUrls('reference_audio'),
+    character_voice_urls: body.character_voice_urls,
     first_frame_url: body.first_frame_url ?? mediaUrls('first_frame')[0],
     last_frame_url: body.last_frame_url ?? mediaUrls('last_frame')[0],
     file_url: body.file_url ?? mediaUrls('file')[0],
@@ -57,7 +58,7 @@ function normalizeVideoRequest(body: any) {
 }
 
 function validateVideoRequest(body: any, provider?: string): string | null {
-  for (const key of ['reference_image_urls', 'reference_video_urls', 'reference_audio_urls']) {
+  for (const key of ['reference_image_urls', 'reference_video_urls', 'reference_audio_urls', 'character_voice_urls']) {
     if (body[key] !== undefined && !Array.isArray(body[key])) return `${key} 必须为数组`
     if (Array.isArray(body[key]) && body[key].some((url: any) => typeof url !== 'string' || !url.trim())) {
       return `${key} 中的每个 URL 都必须为非空字符串`
@@ -184,6 +185,8 @@ app.post('/', async (c) => {
         referenceImageUrls: videoBody!.reference_image_urls,
         referenceVideoUrls: videoBody!.reference_video_urls,
         referenceAudioUrls: videoBody!.reference_audio_urls,
+        // 角色音色样本（可选）：解析不出公网 URL 时会被跳过，回退为模型自己配音
+        characterVoiceUrls: videoBody!.character_voice_urls,
         referenceFileUrl: videoBody!.file_url,
         referenceLinkUrl: videoBody!.link_url,
         generateAudio: videoBody!.generate_audio,

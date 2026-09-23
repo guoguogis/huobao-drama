@@ -1,7 +1,16 @@
 {
   "app": {
-    "title": "火宝短剧",
+    "title": "剧威视频创作平台",
     "updateAvailable": "发现新版本 v{version}，可在「设置 → 关于更新」中升级"
+  },
+  "login": {
+    "title": "登录剧威视频创作平台",
+    "subtitle": "需要登录才能使用，以保护配置的密钥与生成内容",
+    "username": "账号",
+    "password": "口令",
+    "submit": "登录",
+    "submitting": "登录中...",
+    "failed": "登录失败，请重试"
   },
   "common": {
     "confirm": "确认",
@@ -73,6 +82,11 @@
     },
     "confirmDialog": {
       "title": "确认删除"
+    },
+    "accountMenu": {
+      "label": "账号菜单",
+      "confirmPassword": "确认新口令",
+      "mismatch": "两次输入的新口令不一致"
     },
     "localeSwitcher": {
       "label": "切换界面语言"
@@ -265,14 +279,20 @@
       "langNameKo": "한국어",
       "unifiedSwitchWarning": "已切换为 {lang}，界面与 AI 内容语言将同步更新，即将刷新…"
     },
+    "account": {
+      "currentUser": "当前账号",
+      "logout": "退出登录",
+      "changePassword": "修改口令",
+      "changePasswordNote": "至少 {n} 位；修改后其他设备上的登录会立即失效",
+      "currentPassword": "当前口令",
+      "newPassword": "新口令",
+      "save": "保存",
+      "changeSuccess": "口令已更新",
+      "changeFailed": "修改口令失败"
+    },
     "ai": {
       "title": "AI 服务配置",
-      "desc": "先用推荐模板快速落配置，再按服务类型微调。工作台创建集时会锁定所选图片和视频能力。",
-      "quickTitle": "火宝快捷配置",
-      "recommended": "推荐",
-      "quickDesc": "输入 Huobao API Key，一次写入文本、图片、视频三条推荐配置。",
-      "getKey": "前往 api.firemux.com 获取 Key",
-      "applyQuick": "写入火宝配置",
+      "desc": "按服务类型选择模板，或手动添加 provider / base URL / model。工作台创建集时会锁定所选图片和视频能力。",
       "manualTitle": "手动模板",
       "manualDesc": "选择服务类型后，直接用模板填充推荐的 `provider / base URL / model`。",
       "activeCount": "{n} 已启用",
@@ -282,8 +302,6 @@
       "setDefault": "设为该类型默认模型",
       "noBaseUrl": "未设置 Base URL",
       "test": "测试",
-      "apiKeyRequired": "请填写 Huobao API Key",
-      "quickApplied": "火宝快捷配置已写入",
       "defaultModelSwitched": "默认{type}模型已切换为 {model}",
       "meta": {
         "text": "剧本改写、角色场景提取、分镜拆解等 Agent 文本能力",
@@ -387,7 +405,7 @@
       "addTitle": "添加{type}服务",
       "sub": "推荐先选择模板，系统会自动填入更合理的 `Base URL` 与默认模型。",
       "name": "配置名称",
-      "namePlaceholder": "如 火宝默认图像服务",
+      "namePlaceholder": "如 剧威默认图像服务",
       "provider": "服务商",
       "providerPlaceholder": "选择服务商",
       "priority": "优先级",
@@ -613,6 +631,20 @@
       "unnamedScene": "未命名场景",
       "propSingleImage": "道具单品图",
       "propImage": "道具图"
+    },
+    "voice": {
+      "title": "音色样本",
+      "sub": "参考音频",
+      "set": "已设置",
+      "unset": "未设置",
+      "upload": "上传音色",
+      "clear": "清除",
+      "note": "每个角色固定一个音色样本（可随时替换）：作为「参考音频」随视频生成下发，多个角色说话就会带多段音频，并在提示词里写明「第几段对应谁」。限制：mp3 / wav，单段 2–10 秒，单文件 ≤10MB；总时长 ≤15 秒，段数上限 3（Wan 3.0 为 5），超出时会跳过排在后面的角色。本地联调会内联为 Base64，部署后改用带签名的公网链接。",
+      "limitSkipped": "一次最多带 {clips} 段音色样本（总时长 ≤{seconds} 秒），已跳过「{name}」；可先取消其中某个角色的音色",
+      "uploaded": "已设置「{name}」的音色样本",
+      "cleared": "音色样本已清除",
+      "mapping": "音色参考：{list}。各角色的对白请使用对应音色。",
+      "mappingItem": "第{index}段音频={name}"
     },
     "create": {
       "title": "新增{type}",
@@ -879,7 +911,7 @@
     "helpTitle": "使用引导",
     "index": {
       "welcome": {
-        "title": "👋 欢迎使用火宝短剧",
+        "title": "👋 欢迎使用剧威视频创作平台",
         "desc": "小说 → 剧本 → 资产 → 分镜 → 视频 → 成片，一站式 AI 短剧制作。先配置 AI 服务，再创建第一个项目。"
       },
       "create": {
@@ -888,14 +920,10 @@
       },
       "settings": {
         "title": "第 1 步 · 配置 AI 服务",
-        "desc": "所有 AI 功能都要先配置。点这里进「设置」页，粘贴 Huobao API Key 一键完成文本/图片/视频三条配置。"
+        "desc": "所有 AI 功能都要先配置。点这里进「设置」页，按厂商添加文本、图片、视频三类服务。"
       }
     },
     "settings": {
-      "quick": {
-        "title": "最快上手：快捷配置",
-        "desc": "粘贴 Huobao API Key，一键写入文本、图片、视频三条推荐配置，支持连通性测试。"
-      },
       "nav": {
         "title": "全部配置都在这",
         "desc": "左侧切换：AI 服务、通用（界面语言/内容语言）、风格预设、Agent 提示词与技能、存储位置、关于更新。"

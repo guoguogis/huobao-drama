@@ -1,4 +1,4 @@
-# 🎬 Huobao Drama - AI 短剧生成平台
+# 🎬 Juwei Video Creation Platform - AI 短剧生成平台
 
 <div align="center">
 
@@ -13,11 +13,11 @@
 
 [功能特性](#-功能特性) • [快速开始](#-快速开始) • [图文教程](#-图文教程) • [桌面版](#-桌面应用推荐) • [部署指南](#-部署指南)
 
-<h2>🔑 <a href="https://api.firemux.com">获取 Huobao API Key 👉 立即查看</a></h2>
+<h2>🔑 <a href="https://api.firemux.com">获取 Juwei API Key 👉 立即查看</a></h2>
 
 **文本 · 图片 · 视频全部 AI 能力，一个 Key 即可开通**
 
-部署完成后在「设置 → 火宝快捷配置」粘贴 Key，一键写入三条推荐配置，开箱即用
+部署完成后在「设置 → 剧威快捷配置」粘贴 Key，一键写入三条推荐配置，开箱即用
 
 <h3>📥 <a href="https://github.com/chatfire-AI/huobao-drama/releases/latest">下载桌面版（macOS / Windows）</a></h3>
 <h3>🌐 <a href="https://www.chatfire.site">官方网站</a></h3>
@@ -28,7 +28,7 @@
 
 ## 📖 项目简介
 
-Huobao Drama 是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。
+Juwei Video Creation Platform 是一个基于 AI 的短剧自动化生产平台，实现从剧本生成、角色设计、分镜制作到视频合成的全流程自动化。
 
 ### 🎯 核心价值
 
@@ -125,7 +125,10 @@ data/       — 生成资源文件与 SQLite 数据库
 | `WORKSPACE_PATH` | `backend/workspace` | Agent 技能/提示词目录（桌面版指向 userData 可写副本） |
 | `FRONTEND_DIST` | `frontend/dist` | 前端静态产物目录 |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | npm 内置二进制 | 自定义 ffmpeg/ffprobe 可执行文件路径 |
-| `PUBLIC_BASE_URL` | — | Seedance 引用本地参考资源时所需的公网地址（服务器部署用） |
+| `PUBLIC_BASE_URL` | — | 本站公网地址。配置后本地参考视频/音频以**带签名的 URL** 交给上游（服务器部署用）；未配置则改为内联 Base64 |
+| `MEDIA_REF_MODE` | `auto` | 本地参考视频/音频交给上游的方式：`auto`（未配 `PUBLIC_BASE_URL` 时内联 Base64，否则用签名 URL）、`inline`、`public` |
+| `MEDIA_INLINE_MAX_MB` | `15` | 可内联 Base64 的单文件体积上限，超出则回退签名 URL |
+| `MEDIA_URL_TTL_HOURS` | `6` | 交给上游的签名素材 URL 有效期 |
 
 > **说明**：AI 服务的 API Key、Base URL 和模型参数全部在 Web 界面的「设置」页配置并入库，不在配置文件/环境变量中维护。
 
@@ -200,7 +203,7 @@ cd backend && npx tsx scripts/import-mysql-to-sqlite.ts
 启动后所有 AI 功能（文本/生图/视频）都需要先配置模型服务，未配置时页面顶部会有横幅引导：
 
 1. 打开「设置」页
-2. 在「火宝快捷配置」中粘贴 Huobao API Key（[前往 api.firemux.com 获取](https://api.firemux.com)），一键写入文本、图片、视频三条推荐配置
+2. 在「剧威快捷配置」中粘贴 Juwei API Key（[前往 api.firemux.com 获取](https://api.firemux.com)），一键写入文本、图片、视频三条推荐配置
 3. 或使用「手动模板」按厂商逐个添加，支持连通性测试
 
 配置完成横幅自动消失，即可开始创建剧集生产。
@@ -227,7 +230,7 @@ cd backend && npx tsx scripts/import-mysql-to-sqlite.ts
 
 ### 第 2 步 · 配置 AI 服务（首次）
 
-设置页「火宝快捷配置」粘贴 API Key 一键写入三条推荐配置；或用「手动模板」按厂商自选模型（顶栏可随时切换当前模型，见第 5 步）。
+设置页「剧威快捷配置」粘贴 API Key 一键写入三条推荐配置；或用「手动模板」按厂商自选模型（顶栏可随时切换当前模型，见第 5 步）。
 
 <p align="center">
   <img src="docs/screenshots/03-settings-quick.png" alt="AI 服务配置" width="800">
@@ -356,7 +359,7 @@ npm run build:frontend   # 前端静态产物（frontend/.output/public）
 cd desktop && npm run dev  # 打包后端 bundle 并以 Electron 窗口运行
 ```
 
-> 已知限制：Seedance 视频模型引用本地参考资源时需要 `PUBLIC_BASE_URL` 公网地址，桌面版无公网入口，该场景会得到明确的中文报错；文生视频/图片等其余能力不受影响。
+> 本地参考素材说明：未配置 `PUBLIC_BASE_URL` 时，参考**音频**会内联为 Base64 `data:` URL（模型厂商访问不到你的本机，这是本地联调唯一可行的方式），参考**视频**因体积过大则给出明确的中文报错；部署到服务器后配置 `PUBLIC_BASE_URL`，素材改为**带签名的 URL** 交给上游，无需对公网开放。文生视频/图片等其余能力不受影响。
 
 ---
 
@@ -490,7 +493,7 @@ A: 无需安装。项目内置 `ffmpeg-static` / `ffprobe-static` 二进制（�
 
 ### Q: 页面顶部提示「尚未配置模型」？
 
-A: 这是正常的首次部署引导。前往「设置」页，用「火宝快捷配置」粘贴 API Key 一键写入，或通过「手动模板」按厂商添加。文本、图片、视频三类均有启用中的配置后横幅自动消失。
+A: 这是正常的首次部署引导。前往「设置」页，用「剧威快捷配置」粘贴 API Key 一键写入，或通过「手动模板」按厂商添加。文本、图片、视频三类均有启用中的配置后横幅自动消失。
 
 ### Q: 前端无法连接后端 API？
 
@@ -540,7 +543,7 @@ A: 后端会在首次启动时自动创建所有表，检查日志确认初始�
   - 新增 `docker/init.sql` 及导出脚本（DBA 审核 / 预建表）
 - 首次使用引导
   - 未配置 AI 服务时全站顶部横幅提示并引导至设置页
-  - 设置页新增「火宝快捷配置」：一个 Key 写入文本/图片/视频三条推荐配置
+  - 设置页新增「剧威快捷配置」：一个 Key 写入文本/图片/视频三条推荐配置
   - 未配置模型的报错中文化并指引设置页
 - 视频模型默认调整为 Seedance 2.0 Fast
 - 厂商收敛：仅保留 OpenAI / Gemini / 火山引擎

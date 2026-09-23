@@ -191,7 +191,7 @@ function startBackend(): void {
     backend = null
     // 迁移/重启期间的退出是预期行为，由调用方接管
     if (!quitting && !backendRestarting) {
-      dialog.showErrorBox('火宝短剧', `后台服务异常退出（code ${code}），应用即将关闭。请重新启动。`)
+      dialog.showErrorBox('剧威视频创作平台', `后台服务异常退出（code ${code}），应用即将关闭。请重新启动。`)
       app.quit()
     }
   })
@@ -203,7 +203,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
-    title: '火宝短剧',
+    title: '剧威视频创作平台',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -213,7 +213,7 @@ function createWindow() {
   // 页面标题自带产品名，避免文件路径兜底标题
   mainWindow.on('page-title-updated', e => e.preventDefault())
   mainWindow.on('closed', () => { mainWindow = null })
-  // 外链一律交给系统浏览器：应用内不弹新窗（如设置页「前往 api.firemux.com 获取 Key」）
+  // 外链一律交给系统浏览器：应用内不弹新窗（如侧栏 GitHub 链接、关于页的发布页链接）
   const isAppUrl = (url: string) => url.startsWith(`http://127.0.0.1:${backendPort}`)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url) && !isAppUrl(url)) void shell.openExternal(url)
@@ -262,7 +262,7 @@ async function bootstrap() {
     await createWindow()
   } catch (err) {
     console.error('[main] 启动失败:', err)
-    dialog.showErrorBox('火宝短剧', `启动失败：\n${(err as Error)?.message || err}`)
+    dialog.showErrorBox('剧威视频创作平台', `启动失败：\n${(err as Error)?.message || err}`)
     app.quit()
   }
 }

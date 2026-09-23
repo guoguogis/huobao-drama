@@ -1,4 +1,4 @@
-# 🎬 Huobao Drama - AI 숏드라마 생성 플랫폼
+# 🎬 Juwei Video Creation Platform - AI 숏드라마 생성 플랫폼
 
 <div align="center">
 
@@ -13,11 +13,11 @@
 
 [기능](#-기능) • [빠른 시작](#-빠른-시작) • [튜토리얼](#-그림-튜토리얼) • [데스크톱 앱](#-데스크톱-앱-권장) • [배포](#-배포)
 
-<h2>🔑 <a href="https://api.firemux.com">Huobao API Key 받기 👉 바로 보기</a></h2>
+<h2>🔑 <a href="https://api.firemux.com">Juwei API Key 받기 👉 바로 보기</a></h2>
 
 **텍스트 · 이미지 · 영상 모든 AI 기능, Key 하나로 활성화**
 
-배포 후 「설정 → 火宝快捷 설정」에 Key 를 붙여넣으면 추천 설정 3개가 한 번에 입력됩니다
+배포 후 「설정 → 剧威快捷 설정」에 Key 를 붙여넣으면 추천 설정 3개가 한 번에 입력됩니다
 
 <h3>📥 <a href="https://github.com/chatfire-AI/huobao-drama/releases/latest">데스크톱 앱 다운로드 (macOS / Windows)</a></h3>
 <h3>🌐 <a href="https://www.chatfire.site">공식 웹사이트</a></h3>
@@ -28,7 +28,7 @@
 
 ## 📖 프로젝트 소개
 
-Huobao Drama는 AI 기반 숏드라마 자동 제작 플랫폼으로, 각본 생성, 캐릭터 디자인, 스토리보드 제작부터 영상 합성까지 전 과정을 자동화합니다.
+Juwei Video Creation Platform는 AI 기반 숏드라마 자동 제작 플랫폼으로, 각본 생성, 캐릭터 디자인, 스토리보드 제작부터 영상 합성까지 전 과정을 자동화합니다.
 
 ### 🎯 핵심 가치
 
@@ -125,7 +125,10 @@ data/       — 생성된 에셋과 SQLite 데이터베이스
 | `WORKSPACE_PATH` | `backend/workspace` | Agent 스킬/프롬프트 디렉터리(데스크톱 버전은 userData의 쓰기 가능한 복사본) |
 | `FRONTEND_DIST` | `frontend/dist` | 프런트엔드 정적 빌드 디렉터리 |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | npm 내장 바이너리 | 사용자 지정 ffmpeg/ffprobe 실행 파일 경로 |
-| `PUBLIC_BASE_URL` | — | Seedance가 로컬 참조 리소스를 사용할 때 필요한 공개 주소(서버 배포용) |
+| `PUBLIC_BASE_URL` | — | 이 백엔드의 공개 주소. 설정하면 로컬 참조 영상/오디오를 **서명된 URL**로 업스트림 API에 전달합니다(서버 배포용). 미설정 시 Base64로 인라인 |
+| `MEDIA_REF_MODE` | `auto` | 로컬 참조 영상/오디오를 업스트림에 전달하는 방식: `auto`(`PUBLIC_BASE_URL` 미설정 시 Base64 인라인, 설정 시 서명 URL), `inline`, `public` |
+| `MEDIA_INLINE_MAX_MB` | `15` | Base64 인라인이 가능한 단일 파일 크기 상한. 초과 시 서명 URL로 폴백 |
+| `MEDIA_URL_TTL_HOURS` | `6` | 업스트림에 전달하는 서명된 소재 URL의 유효 기간 |
 
 > **설명**：AI 서비스의 API Key, Base URL, 모델 파라미터는 모두 웹 UI의 「설정」 페이지에서 설정하여 데이터베이스에 저장합니다. 설정 파일이나 환경 변수로 관리하지 않습니다.
 
@@ -201,7 +204,7 @@ cd backend && npx tsx scripts/import-mysql-to-sqlite.ts
 시작 후 모든 AI 기능(텍스트/이미지/영상)을 사용하려면 먼저 모델 서비스를 설정해야 합니다. 미설정 시 페이지 상단에 배너로 안내합니다:
 
 1. 「설정」 페이지 열기
-2. 「火宝快捷 설정」에 Huobao API Key 붙여넣기([api.firemux.com에서 발급](https://api.firemux.com)). 텍스트, 이미지, 영상 추천 설정 3개가 한 번에 입력됩니다
+2. 「剧威快捷 설정」에 Juwei API Key 붙여넣기([api.firemux.com에서 발급](https://api.firemux.com)). 텍스트, 이미지, 영상 추천 설정 3개가 한 번에 입력됩니다
 3. 또는 「수동 템플릿」으로 프로바이더별 추가. 연결 테스트 지원
 
 설정이 완료되면 배너가 자동으로 사라지고 에피소드 제작을 시작할 수 있습니다.
@@ -355,7 +358,7 @@ npm run build:frontend   # 프런트엔드 정적 산출물(frontend/.output/pub
 cd desktop && npm run dev  # 백엔드 번들 후 Electron 창으로 실행
 ```
 
-> 알려진 제한: Seedance 영상 모델이 로컬 참조 리소스를 사용하려면 `PUBLIC_BASE_URL` 공개 주소가 필요합니다. 데스크톱 버전에는 공개 진입점이 없어 해당 시나리오에서는 명확한 오류 메시지가 표시됩니다. 텍스트→영상/이미지 생성 등 나머지 기능에는 영향이 없습니다.
+> 로컬 참조 소재 안내: `PUBLIC_BASE_URL`이 없으면 참조 **오디오**는 Base64 `data:` URL로 인라인됩니다(모델 제공자는 사용자 PC에 접근할 수 없으므로 로컬 개발에서 유일하게 동작하는 방식입니다). 참조 **영상**은 용량이 커서 명확한 오류가 반환됩니다. 서버에 배포해 `PUBLIC_BASE_URL`을 설정하면 소재가 **서명된 URL**로 전달되어 공개 상태로 둘 필요가 없습니다. 텍스트→영상/이미지 생성 등 나머지 기능에는 영향이 없습니다.
 
 ---
 
@@ -491,7 +494,7 @@ A: 설치할 필요가 없습니다. 프로젝트에 `ffmpeg-static` / `ffprobe-
 
 ### Q: 페이지 상단에 「모델 미설정」이 표시됩니다?
 
-A: 정상적인 첫 배포 안내입니다. 「설정」 페이지에서 「火宝快捷 설정」에 API Key를 붙여넣어 한 번에 입력하거나, 「수동 템플릿」으로 프로바이더를 추가하세요. 텍스트, 이미지, 영상 3가지 모두에 활성화된 설정이 있으면 배너가 자동으로 사라집니다.
+A: 정상적인 첫 배포 안내입니다. 「설정」 페이지에서 「剧威快捷 설정」에 API Key를 붙여넣어 한 번에 입력하거나, 「수동 템플릿」으로 프로바이더를 추가하세요. 텍스트, 이미지, 영상 3가지 모두에 활성화된 설정이 있으면 배너가 자동으로 사라집니다.
 
 ### Q: 프런트엔드가 백엔드 API에 연결되지 않습니다?
 
@@ -542,7 +545,7 @@ A: 백엔드는 최초 시작 시 모든 테이블을 자동으로 생성합니�
   - `docker/init.sql` 및 납출 스크립트 추가(DBA 검토 / 사전 테이블 생성)
 - 첫 사용 가이드
   - AI 서비스 미설정 시 사이트 상단 배너로 설정 페이지 안내
-  - 설정 페이지에 「火宝快捷 설정」 추가: Key 하나로 텍스트/이미지/영상 추천 설정 3개 입력
+  - 설정 페이지에 「剧威快捷 설정」 추가: Key 하나로 텍스트/이미지/영상 추천 설정 3개 입력
   - 모델 미설정 오류의 중국어화 및 설정 페이지 안내
 - 영상 모델 기본값을 Seedance 2.0 Fast로 조정
 - 프로바이더 통합: OpenAI / Gemini / Volcano Engine만 유지

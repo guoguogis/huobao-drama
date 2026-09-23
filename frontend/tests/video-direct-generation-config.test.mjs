@@ -17,17 +17,14 @@ test('video presets default to direct Seedance 2.0 generation', () => {
 
 test('video presets use official provider endpoints', () => {
   const presetsStart = settingsPage.indexOf('const providerPresets = {')
-  const quickStart = settingsPage.indexOf('const huobaoQuickConfigs = [')
-  const providerPresets = settingsPage.slice(presetsStart, quickStart)
+  // 快捷配置常量已移除，改为锚定 providerPresets 之后的第一个顶层函数
+  const presetsEnd = settingsPage.indexOf('function byType(t) {')
+  assert.notEqual(presetsStart, -1)
+  assert.notEqual(presetsEnd, -1)
+  const providerPresets = settingsPage.slice(presetsStart, presetsEnd)
   assert.doesNotMatch(providerPresets, /api\.firemux\.com/)
   assert.match(settingsPage, /https:\/\/ark\.cn-beijing\.volces\.com/)
   assert.match(providerPresets, /https:\/\/\{WorkspaceId\}\.cn-beijing\.maas\.aliyuncs\.com/)
   assert.doesNotMatch(settingsPage, /https:\/\/dashscope\.aliyuncs\.com/)
   assert.doesNotMatch(settingsPage, /https:\/\/api\.vidu\.com/)
-})
-
-test('Wan 3.0 quick preset targets the Qwen gateway namespace', () => {
-  const quickStart = settingsPage.indexOf('const huobaoQuickConfigs = [')
-  const quickConfigs = settingsPage.slice(quickStart)
-  assert.match(quickConfigs, /provider:\s*'aliyun'.*base_url:\s*'https:\/\/api\.firemux\.com\/qwen'.*wan3\.0-video-prime.*wan3\.0-video/s)
 })

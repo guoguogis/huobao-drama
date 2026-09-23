@@ -3,7 +3,7 @@
  * 自 MySQL 迁移：varchar(x)→text（SQLite 不校验长度）、int→integer、
  * boolean→integer boolean mode、时间戳仍为 text 存 ISO 字符串，表/列名不变。
  */
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core'
 
 export const dramas = sqliteTable('dramas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -58,6 +58,10 @@ export const characters = sqliteTable('characters', {
   seedValue: text('seed_value'),
   sortOrder: integer('sort_order'),
   localPath: text('local_path'),
+  /** 角色音色样本（本地 static 路径或公网 URL）；为空表示不指定，回退为视频模型自己配音 */
+  voiceAudioUrl: text('voice_audio_url'),
+  /** 音色样本时长（秒）；上传时探测，供前端汇总总量与生成侧校验 */
+  voiceAudioDuration: real('voice_audio_duration'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at'),

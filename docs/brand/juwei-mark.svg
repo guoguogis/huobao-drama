@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <mask id="juwei-holes-m">
+      <rect width="512" height="512" fill="#fff"/>
+      <rect x="160" y="166" width="30" height="48" rx="12" fill="#000"/><rect x="160" y="232" width="30" height="48" rx="12" fill="#000"/><rect x="160" y="298" width="30" height="48" rx="12" fill="#000"/>
+    </mask>
+  </defs>
+  <path d="M146 128 H206 L388 256 L206 384 H146 A30 30 0 0 1 116 354 V158 A30 30 0 0 1 146 128 Z" fill="#ea580c" mask="url(#juwei-holes-m)"/>
+</svg>

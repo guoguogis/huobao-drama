@@ -23,7 +23,10 @@ import props from './routes/props.js'
 import settings from './routes/settings.js'
 import storage from './routes/storage.js'
 import serverUpdate from './routes/serverUpdate.js'
+import auth from './routes/auth.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
+import { requireAuth } from './middleware/auth.js'
+import { seedAuthAccount, getAuthUsername } from './services/auth.js'
 import { db, schema } from './db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from './utils/response.js'
@@ -41,6 +44,11 @@ app.use('*', cors({
 }))
 app.use('*', requestLogger)
 app.use('*', errorHandler)
+
+// 登录守卫：只保护接口与生成媒体，前端页面资源放行（否则登录页无法加载）。
+// 必须排在下面被保护的路由之前 —— Hono 按注册顺序串链。
+app.use('/api/v1/*', requireAuth)
+app.use('/static/*', requireAuth)
 
 // Health check（version 供部署巡检/更新检查核对当前运行版本）
 app.get('/api/v1/health', (c) => c.json({
@@ -69,6 +77,7 @@ api.route('/props', props)
 api.route('/storage', storage)
 api.route('/settings', settings)
 api.route('/server-update', serverUpdate)
+api.route('/auth', auth)
 
 app.route('/api/v1', api)
 
@@ -86,7 +95,7 @@ app.use('*', serveStatic({ root: distPath }))
 app.get('*', serveStatic({ root: distPath, path: 'index.html' }))
 
 const port = Number(process.env.PORT || 5679)
-console.log(`🚀 Huobao Drama TS server on http://localhost:${port}`)
+console.log(`🚀 Juwei Video Creation Platform TS server on http://localhost:${port}`)
 
 // 进程重启后内存中的轮询线程全部丢失,残留的 processing 任务永远不会完成,
 // 启动时统一标记为 failed,避免前端一直显示"生成中"
@@ -98,5 +107,9 @@ db.update(schema.sysTask)
     if (affected > 0) console.log(`🔁 已清理 ${affected} 个中断的生成任务`)
   })
   .catch(err => console.error('清理中断任务失败:', err?.message))
+
+// 播种登录账号（幂等）：首次启动写入内置账号，AUTH_USERNAME/AUTH_PASSWORD 同时设置时以环境变量为准
+seedAuthAccount()
+console.log(`🔐 登录账号：${getAuthUsername()}（未登录无法访问接口与生成内容）`)
 
 serve({ fetch: app.fetch, port })

@@ -763,7 +763,9 @@
                   <video :src="'/' + taskVideoPath(h)" :poster="posterOf('/' + taskVideoPath(h)) || undefined" preload="none" muted playsinline tabindex="-1" />
                   <span class="video-history-time">{{ formatHistoryTime(taskCreatedAt(h)) }}</span>
                   <span v-if="isCurrentVideo(h)" class="video-history-badge">{{ t('episode.vid.current') }}</span>
-                  <button v-else type="button" class="video-history-del" :title="t('episode.vid.deleteRecord')" @click.stop="removeHistoryVideo(h)">×</button>
+                  <!-- 每条记录都可删除：当前主视频同样可删——后端只删 sys_task 记录、不删文件，
+                       故 storyboard.video_url 指向的视频仍然可播，不会把分镜删坏 -->
+                  <button type="button" class="video-history-del" :title="t('episode.vid.deleteRecord')" @click.stop="removeHistoryVideo(h)">×</button>
                 </div>
               </div>
             </div>
@@ -1238,6 +1240,39 @@
                     ? t('episode.asset.promptHintScene')
                     : t('episode.asset.promptHintProp') }}
               </p>
+
+              <!-- 音色样本：作为「参考音频」随视频生成下发；不设置则回退为视频模型自己配音 -->
+              <div v-if="assetDetail.type === 'character'" class="asset-voice-block">
+                <div class="asset-detail-section-title">
+                  <span>{{ t('episode.voice.title') }}</span>
+                  <span class="dim">{{ t('episode.voice.sub') }}</span>
+                </div>
+                <div class="asset-voice-row">
+                  <span :class="['tag', voiceOf(assetDetail.item) ? 'tag-success' : '']">
+                    {{ voiceOf(assetDetail.item) ? t('episode.voice.set') : t('episode.voice.unset') }}
+                  </span>
+                  <span v-if="voiceOf(assetDetail.item)" class="asset-voice-name mono">{{ voiceLabel(assetDetail.item) }}</span>
+                  <button
+                    class="btn btn-sm"
+                    :disabled="isUploadingVoice(assetDetail.item.id)"
+                    @click="uploadCharacterVoice(assetDetail.item)"
+                  >
+                    <Loader2 v-if="isUploadingVoice(assetDetail.item.id)" :size="11" class="animate-spin" />
+                    {{ t('episode.voice.upload') }}
+                  </button>
+                  <button v-if="voiceOf(assetDetail.item)" class="btn btn-sm" @click="clearCharacterVoice(assetDetail.item)">
+                    {{ t('episode.voice.clear') }}
+                  </button>
+                </div>
+                <audio
+                  v-if="voiceOf(assetDetail.item)"
+                  class="asset-voice-player"
+                  controls
+                  preload="none"
+                  :src="voiceSrc(assetDetail.item)"
+                />
+                <p class="asset-voice-note">{{ t('episode.voice.note') }}</p>
+              </div>
             </section>
           </div>
 
@@ -3268,19 +3303,138 @@ function uploadAssetImage(kind, id) {
   })
 }
 
+// ===== 音色样本（参考音频路线）=====
+// 音色以「参考音频」的形式随视频生成下发，上游按样本音色生成台词；未设置的角色不下发，
+// 回退为视频模型自己配音。素材形式由后端决定（本地联调内联 Base64，部署后签名为公网 URL）。
+// 限制与后端 utils/audio-limits.ts 保持一致：mp3/wav、单段 2–10 秒、总时长 ≤15 秒，
+// 段数上限按模型取（Seedance / MiniMax 3 段，Wan 3.0 5 段）。
+// 产品模型：每个角色固定一个音色样本；一个分镜有几个角色说话就带几段音频。
+const VOICE_TOTAL_MAX_SECONDS = 15
+function voiceOf(item) { return item?.voice_audio_url || item?.voiceAudioUrl || '' }
+function voiceDurationOf(item) {
+  const raw = Number(item?.voice_audio_duration ?? item?.voiceAudioDuration ?? 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : 0
+}
+function voiceSrc(item) {
+  const v = voiceOf(item)
+  return v ? (/^https?:\/\//.test(v) ? v : '/' + v) : ''
+}
+function voiceFileName(item) {
+  const v = voiceOf(item)
+  if (!v) return ''
+  const last = v.split('?')[0].split('/').pop() || v
+  try { return decodeURIComponent(last) } catch { return last }
+}
+function voiceLabel(item) {
+  const name = voiceFileName(item)
+  const dur = voiceDurationOf(item)
+  return dur ? `${name} · ${dur.toFixed(1)}s` : name
+}
+const uploadingVoiceIds = ref([])
+function isUploadingVoice(id) { return uploadingVoiceIds.value.includes(id) }
+function uploadCharacterVoice(item) {
+  if (!item?.id) return
+  // 上游只接受 mp3 / wav，选择器同步收窄，避免传上去才在生成时被上游拒绝
+  pickFile('audio/mpeg,audio/mp3,audio/wav,audio/x-wav,.mp3,.wav', async (file) => {
+    if (!uploadingVoiceIds.value.includes(item.id)) uploadingVoiceIds.value.push(item.id)
+    try {
+      const res = await uploadAPI.audio(file)
+      await characterAPI.update(item.id, {
+        voice_audio_url: res.path,
+        voice_audio_duration: res.duration ?? null,
+      })
+      // 先就地更新面板引用的那个对象（refresh 会替换列表，面板引用可能已过期）
+      item.voice_audio_url = res.path
+      item.voice_audio_duration = res.duration ?? null
+      await refresh()
+      toast.success(t('episode.voice.uploaded', { name: item.name || '' }))
+    } catch (e) {
+      toastError(e)
+    } finally {
+      uploadingVoiceIds.value = uploadingVoiceIds.value.filter(x => x !== item.id)
+    }
+  })
+}
+async function clearCharacterVoice(item) {
+  if (!item?.id) return
+  try {
+    await characterAPI.update(item.id, { voice_audio_url: '', voice_audio_duration: null })
+    item.voice_audio_url = ''
+    item.voice_audio_duration = null
+    await refresh()
+    toast.success(t('episode.voice.cleared'))
+  } catch (e) {
+    toastError(e, { fallback: 'common.deleteFailed' })
+  }
+}
+
+/** 当前模型是否接受参考音频：HappyHorse 族明确不收（适配器会直接拒绝），其余视频模型均支持 */
+const modelAcceptsReferenceAudio = computed(() => !!resolvedVideoModel.value && !isHappyHorseVideo.value)
+/** 音色样本段数上限：与后端 audioMaxClipsFor 一致（Wan 3.0 5 段，其余 3 段） */
+const voiceClipLimit = computed(() => isWan3Video.value ? 5 : 3)
+/**
+ * 按分镜绑定的角色收集音色样本（保持绑定顺序 —— 这个顺序就是上游识别「第 N 段音频」的依据）。
+ * 超出段数/总时长上限的角色会被跳过，名字带回给调用方提示。
+ * 时长探测不到的样本（mp3 且服务端 ffprobe 不可用）不参与总量累计，也不因此被剔除。
+ */
+function shotVoiceSamples(sb) {
+  if (!modelAcceptsReferenceAudio.value) return { urls: [], names: [], skipped: [] }
+  const urls = []
+  const names = []
+  const skipped = []
+  let total = 0
+  for (const char of getStoryboardCharacters(sb)) {
+    const voice = voiceOf(char)
+    if (!voice) continue
+    const duration = voiceDurationOf(char)
+    if (urls.length >= voiceClipLimit.value || (duration > 0 && total + duration > VOICE_TOTAL_MAX_SECONDS)) {
+      skipped.push(char.name || '')
+      continue
+    }
+    urls.push(voice)
+    names.push(char.name || '')
+    total += duration
+  }
+  return { urls, names, skipped }
+}
+
+/**
+ * 音色映射说明，拼进提示词。
+ *
+ * 上游只按 content[] 里音频的出现顺序识别「第 N 段参考音频」，并不知道它属于谁；
+ * 不写明映射，多段音色就会互相串味。顺序与 shotVoiceSamples 收集顺序严格一致。
+ */
+function voiceMappingLine(names) {
+  if (!names.length) return ''
+  const list = names.map((name, i) => t('episode.voice.mappingItem', { index: i + 1, name })).join('，')
+  return t('episode.voice.mapping', { list })
+}
+
 async function genVid(sb, opts = {}) {
   const referenceImages = getShotReferenceImages(sb)
+  // 音色样本（可选）：只有真的设置了样本才下发 character_voice_urls；
+  // 同时把「第 N 段音频 = 哪个角色」写进提示词，否则多角色音色无法区分
+  const voiceSamples = shotVoiceSamples(sb)
+  const promptParts = [resolveVideoPromptRefs(sb), voiceMappingLine(voiceSamples.names)].filter(Boolean)
   // 参考素材完全来自分镜绑定的角色/场景/道具图片
   const params = {
     storyboard_id: sb.id,
     drama_id: dramaId,
-    prompt: resolveVideoPromptRefs(sb),
+    prompt: promptParts.join('\n'),
     duration: Number(sb.duration || 10),
     aspect_ratio: dramaAspectRatio.value,
     generate_audio: true,
     model: bareModelName(videoModel.value) || undefined,
     config_id: ownerConfigId(videoModelOptions.value, videoModel.value),
     reference_image_urls: referenceImages,
+  }
+  if (voiceSamples.urls.length) params.character_voice_urls = voiceSamples.urls
+  if (voiceSamples.skipped.length) {
+    toast.warning(t('episode.voice.limitSkipped', {
+      name: voiceSamples.skipped.join('、'),
+      clips: voiceClipLimit.value,
+      seconds: VOICE_TOTAL_MAX_SECONDS,
+    }))
   }
   if (!params.prompt && !referenceImages.length) {
     toast.error(t('episode.vid.needRefOrPrompt'))
@@ -3663,7 +3817,7 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
   border-color: transparent;
   box-shadow: none;
 }
-/* ChatFire 签名：激活步骤左侧 3px 品牌色圆角指示条 */
+/* 激活步骤左侧 3px 品牌色圆角指示条 */
 .pipe-item.active::before {
   content: '';
   position: absolute;
@@ -4733,7 +4887,8 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
 }
 .video-history-badge {
   position: absolute;
-  right: 4px;
+  /* 左上角：「当前」徽标与右上角的删除按钮需同时可见，不能共用一个角 */
+  left: 4px;
   top: 4px;
   padding: 1px 5px;
   border-radius: 999px;
@@ -4759,7 +4914,8 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
   line-height: 1;
   cursor: pointer;
 }
-.video-history-item:hover .video-history-del { display: flex; }
+.video-history-item:hover .video-history-del,
+.video-history-item:focus-within .video-history-del { display: flex; }
 .video-task-player {
   min-width: 0;
   min-height: 0;
@@ -5322,6 +5478,23 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   letter-spacing: 0;
   text-align: right;
 }
+/* 音色样本 */
+.asset-voice-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.asset-voice-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.asset-voice-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.asset-voice-player { width: 100%; height: 32px; margin-top: 8px; }
+.asset-voice-note { margin: 7px 0 0; font-size: 11px; line-height: 1.65; color: var(--text-3); }
 .asset-detail-state {
   min-height: 20px;
   display: inline-flex;

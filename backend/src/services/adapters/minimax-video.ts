@@ -12,6 +12,9 @@
  * 注意:
  * - 文生视频 ratio 必填且不能为 adaptive；有首帧图（图生视频）时恒为 adaptive，省略 ratio
  * - H3 原生音画同步生成，官方文档无独立 generate_audio 开关，该字段忽略
+ * - 各模态的 url 字段除公网 URL 外，官方还支持 `mm_file://{file_id}`（引用平台已有文件）
+ *   与 `data:<mime>;base64,<Base64>` data URI（格式 token 小写）。本地参考素材的形式由
+ *   services/media-ref.ts 决定：本地联调内联 data URI，服务器部署改用签名公网 URL。
  */
 import type {
   VideoProviderAdapter,

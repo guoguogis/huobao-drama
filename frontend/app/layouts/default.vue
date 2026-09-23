@@ -5,12 +5,12 @@
       <div class="header-left">
         <button class="brand" @click="navigateTo('/')">
           <div class="brand-mark">
-            <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="brand-logo" @error="showBrandImage = false" />
-            <span v-else class="brand-fallback">火</span>
+            <img v-if="showBrandImage" :src="brandLogo" alt="剧威视频创作平台" class="brand-logo" @error="showBrandImage = false" />
+            <span v-else class="brand-fallback">剧</span>
           </div>
           <div class="brand-text">
-            <span class="brand-name">火宝短剧</span>
-            <span class="brand-sub">Huobao Shorts</span>
+            <span class="brand-name">剧威视频创作平台</span>
+            <span class="brand-sub">Juwei Video Creation Platform</span>
           </div>
         </button>
       </div>
@@ -39,6 +39,7 @@
         </a>
         <ThemeToggle />
         <LocaleSwitcher />
+        <AccountMenu />
       </div>
     </header>
 
@@ -144,7 +145,7 @@ watch(locale, checkAiConfigs)
 .brand-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
 .brand-name {
   font-size: 15px; font-weight: 700;
-  /* ChatFire 签名：品牌字标火焰橙渐变 */
+  /* 品牌字标：品牌橙渐变 */
   background: var(--accent-gradient);
   -webkit-background-clip: text;
   background-clip: text;

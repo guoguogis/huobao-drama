@@ -60,6 +60,8 @@ export const sqliteSchemaStatements = [
     seed_value TEXT,
     sort_order INTEGER,
     local_path TEXT,
+    voice_audio_url TEXT,
+    voice_audio_duration REAL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     deleted_at TEXT
@@ -374,10 +376,33 @@ const UPGRADE_SQL = 'UPDATE style_presets SET "name" = ?, "prompt" = ?, "descrip
 // 内容寻址下架：命中下架种子原文才删除
 const REMOVE_SQL = 'DELETE FROM style_presets WHERE "value" = ? AND "prompt" = ?'
 
+/**
+ * 幂等加列。
+ *
+ * SQLite 的 `CREATE TABLE IF NOT EXISTS` 对**已存在**的表是空操作，不会补新列——
+ * 老库升级后会直接报 "no such column"。项目没引入迁移框架，因此新增列必须在这里登记，
+ * 重复执行安全（已有该列就跳过）。
+ */
+function ensureColumns(sqlite: Database.Database, table: string, columns: Record<string, string>) {
+  const existing = new Set(
+    (sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name),
+  )
+  for (const [name, ddl] of Object.entries(columns)) {
+    if (existing.has(name)) continue
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`)
+    console.log(`🧱 ${table} 补列：${name}`)
+  }
+}
+
 export function initSqliteSchema(sqlite: Database.Database) {
   for (const statement of sqliteSchemaStatements) {
     sqlite.exec(statement)
   }
+  // 建表语句覆盖不到「给已有表加列」，新增列统一在此登记
+  ensureColumns(sqlite, 'characters', {
+    voice_audio_url: 'TEXT',
+    voice_audio_duration: 'REAL',
+  })
   const insertSeed = sqlite.prepare(SEED_SQL)
   const upgradeSeed = sqlite.prepare(UPGRADE_SQL)
   const removeSeed = sqlite.prepare(REMOVE_SQL)

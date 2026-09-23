@@ -1,4 +1,4 @@
-# 🎬 Huobao Drama - AI Short Drama Generation Platform
+# 🎬 Juwei Video Creation Platform - AI Short Drama Generation Platform
 
 <div align="center">
 
@@ -13,11 +13,11 @@
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Walkthrough](#-visual-walkthrough) • [Desktop App](#-desktop-app-recommended) • [Deployment](#-deployment)
 
-<h2>🔑 <a href="https://api.firemux.com">Get a Huobao API Key 👉 Get started</a></h2>
+<h2>🔑 <a href="https://api.firemux.com">Get a Juwei API Key 👉 Get started</a></h2>
 
 **Text, image, and video AI capabilities — one key unlocks everything**
 
-After deploying, paste the key in "Settings → Huobao Quick Setup" to write three recommended configs in one click
+After deploying, paste the key in "Settings → Juwei Quick Setup" to write three recommended configs in one click
 
 <h3>📥 <a href="https://github.com/chatfire-AI/huobao-drama/releases/latest">Download Desktop App (macOS / Windows)</a></h3>
 <h3>🌐 <a href="https://www.chatfire.site">Official Website</a></h3>
@@ -28,7 +28,7 @@ After deploying, paste the key in "Settings → Huobao Quick Setup" to write thr
 
 ## 📖 Overview
 
-Huobao Drama is an AI-powered short-drama production platform that automates the entire pipeline: script generation, character design, storyboard breakdown, and video compositing.
+Juwei Video Creation Platform is an AI-powered short-drama production platform that automates the entire pipeline: script generation, character design, storyboard breakdown, and video compositing.
 
 ### 🎯 Core Value
 
@@ -125,7 +125,10 @@ No config files — everything is set via environment variables (all have defaul
 | `WORKSPACE_PATH` | `backend/workspace` | Agent skills/prompts directory (desktop: writable copy under userData) |
 | `FRONTEND_DIST` | `frontend/dist` | Frontend static build directory |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | bundled npm binaries | Custom ffmpeg/ffprobe executable paths |
-| `PUBLIC_BASE_URL` | — | Public URL Seedance needs to reference local assets (server deployments) |
+| `PUBLIC_BASE_URL` | — | Public URL of this backend. When set, local reference videos/audios are handed to the upstream API as signed URLs (server deployments). Unset → local assets are inlined as Base64 instead |
+| `MEDIA_REF_MODE` | `auto` | How local reference videos/audios reach the upstream API: `auto` (inline Base64 when `PUBLIC_BASE_URL` is unset, otherwise signed URLs), `inline`, or `public` |
+| `MEDIA_INLINE_MAX_MB` | `15` | Max file size eligible for Base64 inlining; larger files fall back to signed URLs |
+| `MEDIA_URL_TTL_HOURS` | `6` | Lifetime of signed media URLs handed to the upstream API |
 
 > **Note**: AI service API keys, base URLs, and model parameters are all configured in the web UI "Settings" page and stored in the database — never in config files or environment variables.
 
@@ -201,7 +204,7 @@ cd backend && npx tsx scripts/import-mysql-to-sqlite.ts
 All AI features (text/image/video) require model services to be configured first — a banner at the top of the page guides you until then:
 
 1. Open the "Settings" page
-2. Paste your Huobao API key in "Huobao Quick Setup" ([get one at api.firemux.com](https://api.firemux.com)) to write three recommended configs (text, image, video) in one click
+2. Paste your Juwei API key in "Juwei Quick Setup" ([get one at api.firemux.com](https://api.firemux.com)) to write three recommended configs (text, image, video) in one click
 3. Or add providers one by one via "Manual Templates", with connectivity testing
 
 Once configured, the banner disappears and you can start producing episodes.
@@ -226,7 +229,7 @@ On the home page click "New Project", pick a **aspect ratio** (16:9 landscape / 
 
 ### Step 2 · Configure AI Services (first run)
 
-Paste an API key in Settings → "Huobao Quick Setup" to write the three recommended configs at once, or add providers manually. The current model can be switched any time from the top bar (see Step 5).
+Paste an API key in Settings → "Juwei Quick Setup" to write the three recommended configs at once, or add providers manually. The current model can be switched any time from the top bar (see Step 5).
 
 <p align="center">
   <img src="docs/screenshots/03-settings-quick.png" alt="AI service setup" width="800">
@@ -355,7 +358,7 @@ npm run build:frontend   # frontend static output (frontend/.output/public)
 cd desktop && npm run dev  # bundle the backend and run in an Electron window
 ```
 
-> Known limitation: Seedance video models need a `PUBLIC_BASE_URL` public address to reference local assets; the desktop app has no public entry point, so that scenario produces a clear error message. Text-to-video, image generation, and all other capabilities are unaffected.
+> On local assets as video references: with no `PUBLIC_BASE_URL`, reference audio is inlined as a Base64 `data:` URL (the model provider cannot reach your machine, so this is the only route that works for local development), and reference video falls back to a clear error because of its size. On a deployed server, set `PUBLIC_BASE_URL` and assets are handed over as signed URLs instead, so they never have to be world-readable. Text-to-video, image generation, and all other capabilities are unaffected.
 
 ---
 
@@ -491,7 +494,7 @@ A: No install needed. The project bundles `ffmpeg-static` / `ffprobe-static` bin
 
 ### Q: The top of the page says "No model configured"?
 
-A: That's the normal first-deploy guidance. Go to "Settings" and use "Huobao Quick Setup" to paste an API key and write configs in one click, or add providers via "Manual Templates". The banner disappears once text, image, and video all have an enabled config.
+A: That's the normal first-deploy guidance. Go to "Settings" and use "Juwei Quick Setup" to paste an API key and write configs in one click, or add providers via "Manual Templates". The banner disappears once text, image, and video all have an enabled config.
 
 ### Q: The frontend can't reach the backend API?
 
@@ -541,7 +544,7 @@ A: The backend creates all tables automatically on first launch — check the lo
   - New `docker/init.sql` and export scripts (DBA review / pre-created tables)
 - First-use guidance
   - Site-wide banner guiding to Settings when no AI service is configured
-  - New "Huobao Quick Setup" in Settings: one key writes three recommended configs (text/image/video)
+  - New "Juwei Quick Setup" in Settings: one key writes three recommended configs (text/image/video)
   - Unconfigured-model errors localized with pointers to Settings
 - Default video model changed to Seedance 2.0 Fast
 - Provider consolidation: OpenAI / Gemini / Volcano Engine only
