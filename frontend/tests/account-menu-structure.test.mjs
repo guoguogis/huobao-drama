@@ -10,11 +10,15 @@ const menu = readApp('components/AccountMenu.vue')
 
 test('顶栏语言切换器之后渲染账号头像组件', () => {
   assert.match(layout, /<AccountMenu\s*\/>/)
-  // 顺序：GitHub → 主题 → 语言 → 账号（需求：语言切换组件之后）
-  const order = ['github-link', 'ThemeToggle', 'LocaleSwitcher', 'AccountMenu']
+  // 顺序：主题 → 语言 → 账号（需求：语言切换组件之后）
+  const order = ['ThemeToggle', 'LocaleSwitcher', 'AccountMenu']
     .map((token) => layout.indexOf(token))
-  assert.ok(order.every((i) => i >= 0), '四个入口都要在顶栏里')
-  assert.deepEqual(order, [...order].sort((a, b) => a - b), '顺序必须是 GitHub → 主题 → 语言 → 账号')
+  assert.ok(order.every((i) => i >= 0), '三个入口都要在顶栏里')
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), '顺序必须是 主题 → 语言 → 账号')
+  // 顶栏的 GitHub 图标已按需求移除；界面上不再有任何 GitHub 入口
+  assert.doesNotMatch(layout, /github-link/)
+  assert.doesNotMatch(layout, /github\.com/)
+  assert.doesNotMatch(layout, /Github/)
 })
 
 test('账号组件复用全站菜单原语，并把触发方式扩展为 hover', () => {

@@ -814,7 +814,26 @@
       "confirmNote": "Generation will start shot by shot with the above config; failed tasks can be retried later via \"Retry failed\".",
       "confirmStart": "Start ({n})",
       "selectMissing": "Select without video",
-      "aspectRatio": "Aspect Ratio"
+      "aspectRatio": "Aspect Ratio",
+      "detailTitle": "Generation details",
+      "detailModel": "Model",
+      "detailOutput": "Output",
+      "detailRefs": "References",
+      "detailRefImages": "images",
+      "detailRefVideos": "videos",
+      "detailRefAudios": "audios",
+      "detailVoiceSamples": "+ {n} voice sample(s)",
+      "detailAudio": "Audio",
+      "detailAudioOn": "generated",
+      "detailStatus": "Status",
+      "detailUpstream": "Upstream task ID",
+      "detailTiming": "Time",
+      "detailElapsed": "took {dur}",
+      "detailError": "Failure reason",
+      "detailPrompt": "Prompt used at generation time",
+      "detailCopyPrompt": "Copy prompt",
+      "detailNoPrompt": "No prompt stored for this record",
+      "detailNoRecord": "No generation record found for this video (it may come from older data or a merged output)"
     },
     "inspector": {
       "videoPromptPlaceholder": "Reference assets with {'@'}character / {'@'}scene — auto-mapped to reference images on generation; then describe motion and camera per time segment…",
@@ -846,7 +865,8 @@
       "sbN": "Shot #{n}",
       "generic": "General",
       "fullMerge": "Full-episode merge",
-      "mergeKind": "Merge"
+      "mergeKind": "Merge",
+      "openInPlayer": "Open in player"
     },
     "export": {
       "notReadyDesc": "Please finish the storyboard and production steps first",
@@ -870,7 +890,18 @@
       "markedDone": "Done",
       "markDoneTitle": "Manually mark this episode's export as done (click again to undo)",
       "markedDoneToast": "Marked as done",
-      "unmarkDoneToast": "Done mark removed"
+      "unmarkDoneToast": "Done mark removed",
+      "versionCount": "{n} version(s)",
+      "noVideo": "No video yet",
+      "pickClip": "Use this version for the merge (one per shot); click the picked one again to exclude the shot",
+      "playClip": "Click to play this clip",
+      "mainBadge": "Main",
+      "notIncluded": "Not selected",
+      "delMerge": "Delete this film",
+      "deleteTitle": "Delete film",
+      "deleteMessage": "Delete the film \"{name}\"? The record will be removed from the list; the video file on disk is kept.",
+      "deleteDone": "Film record deleted",
+      "noShotVideos": "No shot videos generated for this episode yet"
     },
     "image": {
       "generatingChar": "Character image generating",

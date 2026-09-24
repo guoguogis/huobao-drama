@@ -17,26 +17,14 @@
 
       <nav class="header-nav">
         <NuxtLink to="/" class="nav-link" :class="{ active: route.path === '/' }">
-          <LayoutGrid :size="15" :stroke-width="1.8" />
           <span>{{ t('layout.nav.projects') }}</span>
         </NuxtLink>
         <NuxtLink to="/settings" class="nav-link" :class="{ active: route.path === '/settings' }">
-          <Settings :size="15" :stroke-width="1.8" />
           <span>{{ t('layout.nav.settings') }}</span>
         </NuxtLink>
       </nav>
 
       <div class="header-right">
-        <a
-          class="github-link"
-          href="https://github.com/chatfire-AI/huobao-drama"
-          target="_blank"
-          rel="noopener"
-          aria-label="GitHub"
-          title="GitHub"
-        >
-          <Github :size="15" :stroke-width="1.8" />
-        </a>
         <ThemeToggle />
         <LocaleSwitcher />
         <AccountMenu />
@@ -57,7 +45,7 @@
 </template>
 
 <script setup>
-import { LayoutGrid, Settings, TriangleAlert, Github } from 'lucide-vue-next'
+import { TriangleAlert } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { aiConfigAPI } from '~/composables/useApi'
 import brandLogo from '~/assets/huobao-logo.png'
@@ -158,55 +146,49 @@ watch(locale, checkAiConfigs)
   letter-spacing: 0.04em;
 }
 
-/* Nav — pill segmented group */
+/* Nav — 顶部菜单栏（Tab 风格）：两项分开平铺，选中项用底部指示条 */
 .header-nav {
-  display: flex; gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--overlay-track);
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  align-self: stretch;
 }
 
-/* Header 右侧 — 语言切换器 */
-.header-right {
-  margin-left: auto;
-  display: flex; align-items: center;
-}
-/* GitHub 入口 — 与 ThemeToggle 同款圆形图标按钮 */
-.github-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  color: var(--text-2);
-  transition: all 0.18s var(--ease-out);
-  line-height: 1;
-}
-.github-link:hover { color: var(--text-0); background: var(--bg-hover); }
-.github-link:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3.5px var(--button-focus);
-}
 .nav-link {
+  position: relative;
   display: flex; align-items: center; gap: 6px;
-  min-height: 32px;
-  padding: 0 16px; border-radius: var(--radius-pill);
+  padding: 0 15px;
   font-size: 13px; font-weight: 600;
   color: var(--text-2); text-decoration: none;
-  transition: all 0.18s var(--ease-out);
   border: none;
   line-height: 1;
+  transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out);
 }
-.nav-link:hover { color: var(--text-0); }
-.nav-link.active {
-  background: var(--seg-active-bg);
+.nav-link:hover {
   color: var(--text-0);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  background: var(--bg-hover);
+  border-radius: 8px 8px 0 0;
+}
+.nav-link.active { color: var(--text-0); }
+/* 选中指示条：贴在表头底边上 */
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 12px; right: 12px; bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent-gradient);
 }
 .nav-link:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3.5px var(--button-focus);
+  border-radius: 8px 8px 0 0;
+}
+
+/* Header 右侧 — 主题 / 语言 / 账号 */
+.header-right {
+  margin-left: auto;
+  display: flex; align-items: center;
 }
 
 /* Config banner — AI 服务未配置引导 */

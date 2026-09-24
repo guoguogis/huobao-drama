@@ -814,7 +814,26 @@
       "confirmNote": "上記の設定でショットごとに生成を開始します。失敗したタスクは後で「失敗を再試行」からまとめて再実行できます。",
       "confirmStart": "生成開始 ({n})",
       "selectMissing": "未生成を選択",
-      "aspectRatio": "アスペクト比"
+      "aspectRatio": "アスペクト比",
+      "detailTitle": "生成の詳細",
+      "detailModel": "モデル",
+      "detailOutput": "出力仕様",
+      "detailRefs": "参照素材",
+      "detailRefImages": "画像",
+      "detailRefVideos": "動画",
+      "detailRefAudios": "音声",
+      "detailVoiceSamples": "＋ キャラ音声サンプル {n}",
+      "detailAudio": "音声生成",
+      "detailAudioOn": "生成済み",
+      "detailStatus": "状態",
+      "detailUpstream": "上流タスク ID",
+      "detailTiming": "時刻",
+      "detailElapsed": "所要 {dur}",
+      "detailError": "失敗理由",
+      "detailPrompt": "生成時のプロンプト",
+      "detailCopyPrompt": "プロンプトをコピー",
+      "detailNoPrompt": "この記録にプロンプトは保存されていません",
+      "detailNoRecord": "この動画の生成記録が見つかりません（以前のデータまたは結合成果物の可能性があります）"
     },
     "inspector": {
       "videoPromptPlaceholder": "{'@'}キャラクター名 / {'@'}シーン名 で参照素材を指定（生成時に参照画像へ自動マッピング）。時間帯ごとに画面の動きとカメラを記述…",
@@ -846,7 +865,8 @@
       "sbN": "分镜 #{n}",
       "generic": "汎用",
       "fullMerge": "話全体の結合",
-      "mergeKind": "結合"
+      "mergeKind": "結合",
+      "openInPlayer": "プレーヤーで開く"
     },
     "export": {
       "notReadyDesc": "先に分镜と制作の工程を完了してください",
@@ -870,7 +890,18 @@
       "markedDone": "完了",
       "markDoneTitle": "このエピソードの書き出しを手動で完了にします（再クリックで解除）",
       "markedDoneToast": "完了としてマークしました",
-      "unmarkDoneToast": "完了マークを解除しました"
+      "unmarkDoneToast": "完了マークを解除しました",
+      "versionCount": "{n} バージョン",
+      "noVideo": "動画未生成",
+      "pickClip": "このバージョンで結合（1 カットにつき 1 つ）／選択済みをもう一度押すとこのカットを除外",
+      "playClip": "クリックでこのクリップを再生",
+      "mainBadge": "メイン",
+      "notIncluded": "未選択",
+      "delMerge": "この完成映像を削除",
+      "deleteTitle": "完成映像を削除",
+      "deleteMessage": "完成映像「{name}」を削除しますか？一覧からこの記録が消えますが、ディスク上の動画ファイルは残ります。",
+      "deleteDone": "完成映像の記録を削除しました",
+      "noShotVideos": "このエピソードには生成済みのカット動画がありません"
     },
     "image": {
       "generatingChar": "キャラクター画像を生成中",

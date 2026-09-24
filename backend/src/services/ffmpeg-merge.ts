@@ -22,8 +22,15 @@ function toAbsPath(relativePath: string): string {
  * 拼接一集的镜头视频。
  * 优先使用视频生成产物，兼容历史的 composedVideoUrl 数据。
  * 传入 storyboardIds 时只拼接所选镜头（仍按镜号顺序）。
+ * 传入 videoOverrides 时按 `{ 分镜id: 视频相对路径 }` 覆盖默认取用的主视频——
+ * 导出时可以选择该分镜的某个历史版本，而不必改动分镜自身的主视频。
  */
-export async function mergeEpisodeVideos(episodeId: number, dramaId: number, storyboardIds?: number[]): Promise<number> {
+export async function mergeEpisodeVideos(
+  episodeId: number,
+  dramaId: number,
+  storyboardIds?: number[],
+  videoOverrides?: Record<number, string>,
+): Promise<number> {
   let storyboards = await db.select().from(schema.storyboards)
     .where(eq(schema.storyboards.episodeId, episodeId))
     .orderBy(schema.storyboards.storyboardNumber)
@@ -35,7 +42,7 @@ export async function mergeEpisodeVideos(episodeId: number, dramaId: number, sto
 
   // 允许部分拼接:按镜号顺序拼接已生成的镜头,未生成的跳过
   const clips = storyboards
-    .map(sb => ({ sb, url: sb.videoUrl || sb.composedVideoUrl }))
+    .map(sb => ({ sb, url: videoOverrides?.[sb.id] || sb.videoUrl || sb.composedVideoUrl }))
     .filter(c => Boolean(c.url)) as { sb: typeof storyboards[number]; url: string }[]
 
   if (clips.length === 0) throw new Error('所选镜头还没有可拼接的视频')

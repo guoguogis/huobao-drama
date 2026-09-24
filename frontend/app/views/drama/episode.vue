@@ -707,15 +707,15 @@
                 >
                   {{ t('episode.vid.setMain') }}
                 </button>
-                <a
+                <button
                   v-if="previewVideoUrl || hasVid(selectedSb)"
-                  :href="'/' + (previewVideoUrl || getVideoUrl(selectedSb))"
-                  download
                   class="btn btn-sm"
+                  :title="t('episode.vid.detailTitle')"
+                  @click="openVideoDetail"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  {{ t('common.download') }}
-                </a>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  {{ t('episode.vid.detailTitle') }}
+                </button>
               </div>
               <div class="video-player-stage">
                 <video
@@ -903,6 +903,13 @@
                     <span v-if="m.status === 'completed' && m.merged_url" class="merge-card-play">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     </span>
+                    <button
+                      type="button"
+                      class="merge-card-del"
+                      :title="t('episode.export.delMerge')"
+                      :aria-label="t('episode.export.delMerge')"
+                      @click.stop="askDeleteMerge(m)"
+                    >×</button>
                   </div>
                   <div class="merge-card-meta">
                     <span class="mono">{{ formatHistoryTime(m.created_at) }}</span>
@@ -927,7 +934,7 @@
             <div class="export-section export-section-grow">
               <div class="export-section-head">
                 <span class="export-section-title">{{ t('episode.export.shotAssets') }}</span>
-                <span class="dim" style="font-size:11px">{{ t('episode.export.shotStat', { done: shotVidCount, total: sbs.length, selected: exportSelectedReadyIds.length }) }}</span>
+                <span class="dim" style="font-size:11px">{{ t('episode.export.shotStat', { done: exportReadyIds.length, total: sbs.length, selected: exportSelectedReadyIds.length }) }}</span>
                 <div class="ml-auto flex gap-1">
                   <button class="btn btn-sm" :disabled="!exportReadyIds.length" @click="toggleSelectAllExport">
                     {{ exportSelectedReadyIds.length === exportReadyIds.length && exportReadyIds.length ? t('episode.export.clearSelection') : t('episode.export.selectAllReady') }}
@@ -935,56 +942,69 @@
                   <button
                     class="btn btn-sm btn-primary"
                     :disabled="!exportSelectedReadyIds.length"
-                    @click="doMerge(exportSelectedReadyIds)"
+                    @click="doMergeSelected()"
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                     {{ t('episode.export.mergeSelected', { n: exportSelectedReadyIds.length }) }}
                   </button>
                 </div>
               </div>
-              <div class="export-grid">
+              <!-- 只列出「有视频任务」的镜头：每个镜头一行，行内横向排开它的全部视频。
+                   选中态只落在「该镜头选用的那个视频」上，整块素材不做选中高亮 -->
+              <div v-if="exportRows.length" class="export-rows">
                 <div
-                  v-for="(sb, i) in sbs"
+                  v-for="sb in exportRows"
                   :key="sb.id"
-                  :class="['exp-card', { selected: isExportSelected(sb.id), playable: hasVid(sb) }]"
-                  :role="hasVid(sb) ? 'button' : undefined"
-                  :tabindex="hasVid(sb) ? 0 : undefined"
-                  @click="toggleExportSelect(sb)"
-                  @keydown.enter.prevent="toggleExportSelect(sb)"
+                  :class="['exp2-row', { 'no-pick': !isExportSelected(sb) }]"
                 >
-                  <div class="exp-thumb">
-                    <video
-                      v-if="hasVid(sb)"
-                      :src="'/' + getVideoUrl(sb)"
-                      :poster="posterOf('/' + getVideoUrl(sb)) || undefined"
-                      preload="none"
-                      muted
-                      playsinline
-                      tabindex="-1"
-                    />
-                    <div v-else class="exp-thumb-empty">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    </div>
-                    <span class="exp-thumb-index">#{{ String(i+1).padStart(2,'0') }}</span>
-                    <span v-if="sb.duration" class="exp-thumb-duration">{{ sb.duration }}s</span>
-                    <span
-                      v-if="hasVid(sb)"
-                      class="exp-play"
-                      :title="t('episode.export.previewShot')"
-                      @click.stop="previewShot = sb"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                    </span>
-                    <span v-if="hasVid(sb)" :class="['exp-check', isExportSelected(sb.id) && 'on']">
-                      <svg v-if="isExportSelected(sb.id)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </span>
+                  <div class="exp2-row-head">
+                    <span class="exp2-index">#{{ String(sbNumber(sb)).padStart(2,'0') }}</span>
+                    <span class="exp2-title truncate">{{ sb.description || sb.title || '—' }}</span>
+                    <span v-if="sb.duration" class="exp2-duration">{{ sb.duration }}s</span>
+                    <span v-if="!isExportSelected(sb)" class="exp2-not-picked">{{ t('episode.export.notIncluded') }}</span>
+                    <span class="dim exp2-version-count">{{ t('episode.export.versionCount', { n: exportSbClips(sb).length }) }}</span>
                   </div>
-                  <div class="exp-row-line">
-                    <span class="truncate" style="flex:1;font-size:11px">{{ sb.description || sb.title || '—' }}</span>
-                    <span :class="['dot', hasVid(sb) && 'ok']" />
+                  <!-- 该镜头的全部视频：左上角勾选框选定（hover 才出现），点缩略图＝弹框播放 -->
+                  <div class="exp2-clips">
+                    <div
+                      v-for="clip in exportSbClips(sb)"
+                      :key="clip.id"
+                      :class="['exp2-clip', { on: isClipPicked(sb, clip) }]"
+                    >
+                      <button
+                        type="button"
+                        class="exp2-clip-media"
+                        :title="t('episode.export.playClip')"
+                        :aria-label="t('episode.export.playClip')"
+                        @click="openClipPlayer(sb, clip)"
+                      >
+                        <video
+                          :src="'/' + taskClipPath(clip)"
+                          :poster="posterOf('/' + taskClipPath(clip)) || undefined"
+                          preload="none" muted playsinline tabindex="-1"
+                        />
+                        <span class="exp2-clip-play" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        class="exp2-clip-check"
+                        :class="{ on: isClipPicked(sb, clip) }"
+                        :aria-pressed="isClipPicked(sb, clip)"
+                        :aria-label="t('episode.export.pickClip')"
+                        :title="t('episode.export.pickClip')"
+                        @click.stop="pickExportClip(sb, clip)"
+                      >
+                        <svg v-if="isClipPicked(sb, clip)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      </button>
+                      <span v-if="isClipMain(sb, clip)" class="exp2-clip-main">{{ t('episode.export.mainBadge') }}</span>
+                      <span class="exp2-clip-time">{{ formatHistoryTime(taskCreatedAt(clip)) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+              <div v-else class="exp2-empty export-rows-empty">{{ t('episode.export.noShotVideos') }}</div>
             </div>
           </div>
         </div>
@@ -1022,7 +1042,12 @@
             <div
               v-for="row in genTaskRows"
               :key="row.key"
-              :class="['video-task-row', 'gen-task-row', 'is-' + genTaskStateClass(row.status)]"
+              :class="['video-task-row', 'gen-task-row', 'is-' + genTaskStateClass(row.status), { 'is-open': genTaskDetailKey === row.key }]"
+              role="button"
+              tabindex="0"
+              :aria-expanded="genTaskDetailKey === row.key"
+              @click="onGenTaskRowClick(row, $event)"
+              @keydown.enter.prevent="toggleGenTaskDetail(row)"
             >
               <div class="video-task-preview">
                 <video
@@ -1069,6 +1094,84 @@
                 <span :class="['dot', genTaskStateClass(row.status) === 'done' && 'ok', genTaskStateClass(row.status) === 'pending' && 'pending']" />
                 {{ genTaskStatusLabel(row.status) }}
               </span>
+
+              <!-- 行内生成详情（点行展开）：非模态，不离开任务列表 -->
+              <div v-if="genTaskDetailKey === row.key && row.raw" class="history-detail-panel gen-task-detail">
+                <div class="history-detail-head">
+                  <span class="history-detail-title">{{ t('episode.vid.detailTitle') }}</span>
+                  <div class="gen-task-detail-actions">
+                    <button
+                      v-if="canOpenGenTaskInPlayer(row)"
+                      type="button"
+                      class="btn btn-sm"
+                      @click.stop="openGenTaskInPlayer(row)"
+                    >{{ t('episode.tasks.openInPlayer') }}</button>
+                    <button
+                      type="button" class="btn btn-icon btn-sm" :aria-label="t('common.close')"
+                      @click.stop="genTaskDetailKey = ''"
+                    >
+                      <X :size="13" />
+                    </button>
+                  </div>
+                </div>
+                <dl class="history-detail-grid">
+                  <dt>{{ t('episode.vid.detailModel') }}</dt>
+                  <dd>
+                    <span class="mono">{{ row.raw.model || row.model || '—' }}</span>
+                    <span class="dim"> · {{ row.raw.provider || row.provider || '—' }}</span>
+                  </dd>
+
+                  <dt>{{ t('episode.vid.detailOutput') }}</dt>
+                  <dd class="mono">{{ historyOutputSpec(row.raw) || '—' }}</dd>
+
+                  <dt>{{ t('episode.vid.detailRefs') }}</dt>
+                  <dd>
+                    <span class="mono">
+                      {{ t('episode.vid.detailRefImages') }} {{ historyRefSummary(row.raw).images }} ·
+                      {{ t('episode.vid.detailRefVideos') }} {{ historyRefSummary(row.raw).videos }} ·
+                      {{ t('episode.vid.detailRefAudios') }} {{ historyRefSummary(row.raw).audios }}
+                    </span>
+                    <span v-if="historyRefSummary(row.raw).voices" class="tag tag-accent">
+                      {{ t('episode.vid.detailVoiceSamples', { n: historyRefSummary(row.raw).voices }) }}
+                    </span>
+                    <span v-if="historyParams(row.raw).generateAudio" class="tag tag-success">
+                      {{ t('episode.vid.detailAudioOn') }}
+                    </span>
+                  </dd>
+
+                  <dt>{{ t('episode.vid.detailStatus') }}</dt>
+                  <dd>
+                    <span class="tag" :class="row.status === 'completed' ? 'tag-success' : 'tag-error'">
+                      {{ historyStatusLabel(row.raw) }}
+                    </span>
+                    <span class="dim mono">{{ row.raw.status || row.status }}</span>
+                    <span v-if="historyTimeText(row.raw).elapsed" class="tag">
+                      {{ t('episode.vid.detailElapsed', { dur: historyTimeText(row.raw).elapsed }) }}
+                    </span>
+                  </dd>
+
+                  <dt>{{ t('episode.vid.detailUpstream') }}</dt>
+                  <dd class="mono">{{ row.raw.task_id || row.raw.taskId || '—' }}</dd>
+
+                  <dt>{{ t('episode.vid.detailTiming') }}</dt>
+                  <dd class="mono">{{ historyTimeText(row.raw).createdAt || '—' }}</dd>
+                </dl>
+
+                <div v-if="row.raw.error_msg || row.raw.errorMsg || row.errorMsg" class="history-detail-error">
+                  <span class="history-detail-error-label">{{ t('episode.vid.detailError') }}</span>
+                  <span class="mono">{{ row.raw.error_msg || row.raw.errorMsg || row.errorMsg }}</span>
+                </div>
+
+                <div class="history-detail-prompt-head">
+                  <span class="video-inspector-label">{{ t('episode.vid.detailPrompt') }}</span>
+                  <button
+                    type="button" class="btn btn-ghost btn-sm"
+                    :disabled="!row.raw.prompt" @click.stop="copyHistoryPrompt(row.raw)"
+                  >{{ t('episode.vid.detailCopyPrompt') }}</button>
+                </div>
+                <pre v-if="row.raw.prompt" class="history-detail-prompt">{{ row.raw.prompt }}</pre>
+                <p v-else class="history-detail-prompt dim">{{ t('episode.vid.detailNoPrompt') }}</p>
+              </div>
             </div>
           </div>
         </aside>
@@ -1438,6 +1541,106 @@
         </div>
       </div>
 
+      <!-- 片段播放：导出页镜头素材里点视频缩略图打开 -->
+      <div v-if="clipPlayer" class="overlay image-viewer-overlay" @click.self="closeClipPlayer">
+        <div class="dialog image-viewer-dialog merge-viewer-dialog">
+          <div class="image-viewer-head">
+            <div class="image-viewer-title">{{ clipPlayer.title }}</div>
+            <span class="dim" style="font-size:11px">
+              {{ clipPlayer.time }}<template v-if="clipPlayer.main"> · {{ t('episode.export.mainBadge') }}</template>
+            </span>
+            <button class="btn btn-ghost btn-icon" style="margin-left:auto" :aria-label="t('common.close')" @click="closeClipPlayer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="merge-viewer-body">
+            <video
+              :key="clipPlayer.path"
+              :src="'/' + clipPlayer.path"
+              controls
+              autoplay
+              playsinline
+              class="merge-viewer-video"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 生成详情：大视频区域「详情」按钮打开，展示当前这条视频的生成参数与提示词 -->
+      <div v-if="videoDetailOpen" class="overlay video-detail-overlay" @click.self="closeVideoDetail">
+        <div class="dialog video-detail-dialog" role="dialog" aria-modal="true" :aria-label="t('episode.vid.detailTitle')">
+          <div class="image-viewer-head">
+            <div class="image-viewer-title">{{ t('episode.vid.detailTitle') }}</div>
+            <span class="dim" style="font-size:11px">{{ videoDetailSubtitle }}</span>
+            <button class="btn btn-ghost btn-icon" style="margin-left:auto" :aria-label="t('common.close')" @click="closeVideoDetail">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div v-if="videoDetail" class="video-detail-body">
+            <dl class="history-detail-grid">
+              <dt>{{ t('episode.vid.detailModel') }}</dt>
+              <dd>
+                <span class="mono">{{ videoDetail.model || '—' }}</span>
+                <span class="dim"> · {{ videoDetail.provider || '—' }}</span>
+              </dd>
+
+              <dt>{{ t('episode.vid.detailOutput') }}</dt>
+              <dd class="mono">{{ historyOutputSpec(videoDetail) || '—' }}</dd>
+
+              <dt>{{ t('episode.vid.detailRefs') }}</dt>
+              <dd>
+                <span class="mono">
+                  {{ t('episode.vid.detailRefImages') }} {{ historyRefSummary(videoDetail).images }} ·
+                  {{ t('episode.vid.detailRefVideos') }} {{ historyRefSummary(videoDetail).videos }} ·
+                  {{ t('episode.vid.detailRefAudios') }} {{ historyRefSummary(videoDetail).audios }}
+                </span>
+                <span v-if="historyRefSummary(videoDetail).voices" class="tag tag-accent">
+                  {{ t('episode.vid.detailVoiceSamples', { n: historyRefSummary(videoDetail).voices }) }}
+                </span>
+                <span v-if="historyParams(videoDetail).generateAudio" class="tag tag-success">
+                  {{ t('episode.vid.detailAudioOn') }}
+                </span>
+              </dd>
+
+              <dt>{{ t('episode.vid.detailStatus') }}</dt>
+              <dd>
+                <span class="tag" :class="videoDetail.status === 'completed' ? 'tag-success' : 'tag-error'">
+                  {{ historyStatusLabel(videoDetail) }}
+                </span>
+                <span class="dim mono">{{ videoDetail.status }}</span>
+                <span v-if="historyTimeText(videoDetail).elapsed" class="tag">
+                  {{ t('episode.vid.detailElapsed', { dur: historyTimeText(videoDetail).elapsed }) }}
+                </span>
+              </dd>
+
+              <dt>{{ t('episode.vid.detailUpstream') }}</dt>
+              <dd class="mono">{{ videoDetail.task_id || videoDetail.taskId || '—' }}</dd>
+
+              <dt>{{ t('episode.vid.detailTiming') }}</dt>
+              <dd class="mono">{{ historyTimeText(videoDetail).createdAt || '—' }}</dd>
+            </dl>
+
+            <div v-if="videoDetail.error_msg || videoDetail.errorMsg" class="history-detail-error">
+              <span class="history-detail-error-label">{{ t('episode.vid.detailError') }}</span>
+              <span class="mono">{{ videoDetail.error_msg || videoDetail.errorMsg }}</span>
+            </div>
+
+            <div class="history-detail-prompt-head">
+              <span class="video-inspector-label">{{ t('episode.vid.detailPrompt') }}</span>
+              <button
+                type="button" class="btn btn-ghost btn-sm"
+                :disabled="!videoDetail.prompt" @click="copyHistoryPrompt(videoDetail)"
+              >{{ t('episode.vid.detailCopyPrompt') }}</button>
+            </div>
+            <pre v-if="videoDetail.prompt" class="history-detail-prompt">{{ videoDetail.prompt }}</pre>
+            <p v-else class="history-detail-prompt dim">{{ t('episode.vid.detailNoPrompt') }}</p>
+          </div>
+
+          <div v-else class="video-detail-empty">{{ t('episode.vid.detailNoRecord') }}</div>
+        </div>
+      </div>
+
       <div v-if="assetCreate.open" class="overlay" @click.self="assetCreate.open = false">
         <div class="dialog asset-create-dialog">
           <header class="dialog-head">
@@ -1505,6 +1708,15 @@
         @confirm="confirmDeleteAsset"
         @cancel="assetDelete.open = false"
       />
+
+      <ConfirmDialog
+        :open="mergeDelete.open"
+        :title="t('episode.export.deleteTitle')"
+        :message="t('episode.export.deleteMessage', { name: mergeDeleteLabel })"
+        :loading="mergeDelete.loading"
+        @confirm="confirmDeleteMerge"
+        @cancel="mergeDelete.open = false"
+      />
     </main>
     </div>
   </div>
@@ -1554,38 +1766,180 @@ const epId = computed(() => episode.value?.id || 0)
 const rawLen = computed(() => localRaw.value.replace(/\s/g, '').length || 0)
 const scriptLen = computed(() => localScript.value.replace(/\s/g, '').length || 0)
 
-// ===== 拼接导出:镜头选择 + 成片列表 =====
-const exportSelectedIds = ref([]) // 勾选的镜头 id
+// ===== 拼接导出：按分镜分组选片（每个分镜只能选一个历史版本）=====
 const exportMerges = ref([])      // 成片(拼接记录)列表
+const exportSbTasks = ref({})     // { 分镜id: [视频任务] }，仅 completed 且有文件
+const exportPickBySb = ref({})    // { 分镜id: 该分镜选定的视频相对路径 }
 let exportSelTouched = false      // 用户手动操作过选择后,不再自动全选
 
-const exportReadyIds = computed(() => sbs.value.filter(s => hasVid(s)).map(s => s.id))
-const exportSelectedReadyIds = computed(() => exportSelectedIds.value.filter(id => exportReadyIds.value.includes(id)))
-
-watch(exportReadyIds, (ids) => {
-  if (exportSelTouched) {
-    exportSelectedIds.value = exportSelectedIds.value.filter(id => ids.includes(id))
-  } else {
-    exportSelectedIds.value = [...ids]
-  }
-})
-
-function isExportSelected(id) { return exportSelectedIds.value.includes(id) }
-function toggleExportSelect(sb) {
-  if (!hasVid(sb)) return
-  exportSelTouched = true
-  exportSelectedIds.value = isExportSelected(sb.id)
-    ? exportSelectedIds.value.filter(x => x !== sb.id)
-    : [...exportSelectedIds.value, sb.id]
+function taskClipPath(t) { return t?.local_path || t?.localPath || t?.result_url || t?.resultUrl || '' }
+function exportSbClips(sb) { return exportSbTasks.value[sb.id] || [] }
+/** 镜号：优先用分镜自身的序号，缺失时退回数组下标 */
+function sbNumber(sb) {
+  const n = Number(sb?.storyboard_number ?? sb?.storyboardNumber)
+  return Number.isFinite(n) && n > 0 ? n : (sbs.value.findIndex(s => s.id === sb?.id) + 1)
 }
+
+const exportReadyIds = computed(() => sbs.value.filter(s => exportSbClips(s).length).map(s => s.id))
+const exportSelectedReadyIds = computed(() => exportReadyIds.value.filter(id => !!exportPickBySb.value[id]))
+/** 导出列表只显示「有视频任务」的镜头 */
+const exportRows = computed(() => sbs.value.filter(s => exportSbClips(s).length))
+
+/** 载入本集全部分镜的视频版本（一次请求，按分镜分组、组内按时间倒序） */
+async function loadExportSbTasks() {
+  if (!epId.value) return
+  try {
+    const data = await taskAPI.listByEpisode(epId.value)
+    const rows = Array.isArray(data) ? data : (data?.tasks || [])
+    const grouped = {}
+    for (const t of rows) {
+      if (String(t.type) !== 'video' || String(t.status) !== 'completed') continue
+      const sbId = Number(t.storyboard_id ?? t.storyboardId)
+      const path = taskClipPath(t)
+      if (!sbId || !path) continue
+      if (!grouped[sbId]) grouped[sbId] = []
+      grouped[sbId].push(t)
+    }
+    for (const list of Object.values(grouped)) {
+      list.sort((a, b) => String(taskCreatedAt(b)).localeCompare(String(taskCreatedAt(a))))
+    }
+    exportSbTasks.value = grouped
+  } catch {
+    exportSbTasks.value = {}
+  }
+  ensureExportPicks()
+}
+
+/**
+ * 默认选片：该镜头的主视频（storyboard.video_url）优先；主视频不在版本列表里
+ * （例如记录已被删、或指向拼接产物）时退回第一条。失效选择一并清理。
+ */
+function ensureExportPicks() {
+  const next = { ...exportPickBySb.value }
+  const liveIds = new Set(sbs.value.map(s => String(s.id)))
+  for (const key of Object.keys(next)) if (!liveIds.has(String(key))) delete next[key]
+  for (const sb of sbs.value) {
+    const list = exportSbClips(sb)
+    if (!list.length) { delete next[sb.id]; continue }
+    const paths = list.map(taskClipPath)
+    if (next[sb.id] && paths.includes(next[sb.id])) continue
+    const main = getVideoUrl(sb)
+    next[sb.id] = main && paths.includes(main) ? main : paths[0]
+  }
+  exportPickBySb.value = next
+}
+
+function isExportSelected(sb) { return !!exportPickBySb.value[sb.id] }/** 该版本是否就是本镜头选定的那一个（选中态只落在这一个视频上） */
+function isClipPicked(sb, clip) {
+  const path = taskClipPath(clip)
+  return !!path && exportPickBySb.value[sb.id] === path
+}
+/** 该版本是否为本镜头的主视频（storyboard.video_url） */
+function isClipMain(sb, clip) {
+  const path = taskClipPath(clip)
+  return !!path && path === getVideoUrl(sb)
+}
+
+/** 选中该分镜的某个版本；再点同一个 = 取消该分镜（不参与导出）。任何时刻只保留一个 */
+function pickExportClip(sb, t) {
+  exportSelTouched = true
+  const path = taskClipPath(t)
+  const next = { ...exportPickBySb.value }
+  if (next[sb.id] === path) delete next[sb.id]
+  else next[sb.id] = path
+  exportPickBySb.value = next
+}
+
 function toggleSelectAllExport() {
   exportSelTouched = true
-  exportSelectedIds.value = exportSelectedReadyIds.value.length === exportReadyIds.value.length ? [] : [...exportReadyIds.value]
+  const allSelected = exportReadyIds.value.length > 0
+    && exportSelectedReadyIds.value.length === exportReadyIds.value.length
+  const next = { ...exportPickBySb.value }
+  for (const sb of sbs.value) {
+    const list = exportSbClips(sb)
+    if (!list.length) { delete next[sb.id]; continue }
+    if (allSelected) { delete next[sb.id]; continue }
+    if (next[sb.id]) continue
+    const main = getVideoUrl(sb)
+    const paths = list.map(taskClipPath)
+    next[sb.id] = main && paths.includes(main) ? main : paths[0]
+  }
+  exportPickBySb.value = next
 }
+
+/** 组装覆盖表：{ 分镜id: 选定的视频路径 } —— 让后端按选中的历史版本拼接 */
+function exportOverrides() {
+  const out = {}
+  for (const id of exportSelectedReadyIds.value) {
+    const path = exportPickBySb.value[id]
+    if (path) out[id] = path
+  }
+  return out
+}
+
+async function doMergeSelected() {
+  const ids = exportSelectedReadyIds.value
+  if (!ids.length) { toast.error(t('episode.export.selectFirst')); return }
+  await doMerge(ids, exportOverrides())
+}
+
+// 进入导出面板 / 分镜集合变化时刷新可选版本
+watch(panel, (p) => { if (p === 'export') loadExportSbTasks() }, { immediate: true })
+watch(() => sbs.value.map(s => `${s.id}:${getVideoUrl(s) || ''}`).join(','), () => {
+  if (panel.value === 'export') loadExportSbTasks()
+})
+
+// ─── 片段播放弹框（导出页点视频缩略图打开）───────────────────────
+const clipPlayer = ref(null) // { path, title, time, main }
+
+function openClipPlayer(sb, clip) {
+  const path = taskClipPath(clip)
+  if (!path) return
+  clipPlayer.value = {
+    path,
+    title: sb ? t('episode.export.shotPreview', { n: sbNumber(sb) }) : t('episode.export.playClip'),
+    time: formatHistoryTime(taskCreatedAt(clip)),
+    main: isClipMain(sb, clip),
+  }
+}
+function closeClipPlayer() { clipPlayer.value = null }
 
 async function loadExportMerges() {
   if (!epId.value) return
   try { exportMerges.value = await mergeAPI.list(epId.value) || [] } catch { /* 静默 */ }
+}
+
+// ─── 删除成片记录 ──────────────────────────────────────────────
+// 软删：后端只把 video_merges.deleted_at 置位，磁盘上的成片文件保留
+const mergeDelete = ref({ open: false, item: null, loading: false })
+const mergeDeleteLabel = computed(() => {
+  const m = mergeDelete.value.item
+  if (!m) return ''
+  return formatHistoryTime(m.created_at || m.createdAt) || `#${m.id}`
+})
+
+function askDeleteMerge(m) {
+  if (!m?.id) return
+  mergeDelete.value = { open: true, item: m, loading: false }
+}
+
+async function confirmDeleteMerge() {
+  const item = mergeDelete.value.item
+  if (!item || mergeDelete.value.loading) return
+  mergeDelete.value.loading = true
+  try {
+    await mergeAPI.remove(item.id)
+    // 立即从列表移除，避免等接口回来才消失
+    exportMerges.value = exportMerges.value.filter(m => m.id !== item.id)
+    if (activeMerge.value && activeMerge.value.id === item.id) activeMerge.value = null
+    mergeDelete.value.open = false
+    toast.success(t('episode.export.deleteDone'))
+    await loadExportMerges()
+  } catch (e) {
+    toastError(e)
+  } finally {
+    mergeDelete.value.loading = false
+  }
 }
 
 const scriptStep = ref(storedPanel ? (storedPanel.scriptStep === 0 ? 0 : 1) : 0)
@@ -1694,6 +2048,45 @@ function openTaskDrawer() {
 }
 function closeTaskDrawer() {
   taskDrawer.value = false
+}
+
+// ===== 任务列表行点击 =====
+// 行内展开生成详情（复用历史视频那套展示）；视频/拼接成品可一键载入主播放器
+const genTaskDetailKey = ref('')
+function toggleGenTaskDetail(row) {
+  genTaskDetailKey.value = genTaskDetailKey.value === row.key ? '' : row.key
+}
+/** 成品路径：拼接取 merged_url，生成任务取 local_path/result_url */
+function genTaskResultPath(row) {
+  const raw = row?.raw || {}
+  return row?.kind === 'merge'
+    ? (raw.merged_url || raw.mergedUrl || '')
+    : (taskVideoPath(raw) || raw.local_path || '')
+}
+/** 主播放器只吃站内相对路径，远端成品地址不提供「在播放器中打开」 */
+function canOpenGenTaskInPlayer(row) {
+  if (row?.kind !== 'video' && row?.kind !== 'merge') return false
+  const path = genTaskResultPath(row)
+  return !!path && !/^https?:\/\//i.test(path)
+}
+/** 关抽屉 → 切到制作/视频 → 选中该分镜 → 主播放器加载该成品并展示详情 */
+function openGenTaskInPlayer(row) {
+  if (!canOpenGenTaskInPlayer(row)) return
+  const path = genTaskResultPath(row)
+  closeTaskDrawer()
+  panel.value = 'production'
+  prodTab.value = 'videos'
+  const sbId = Number(row.raw?.storyboard_id ?? row.raw?.storyboardId ?? 0)
+  const sb = sbId ? sbs.value.find(s => s.id === sbId) : null
+  if (sb) selectedSb.value = sb
+  previewVideoUrl.value = path
+  // 先换片再开详情：弹框内容按「当前加载的视频」解析
+  openVideoDetail()
+}
+/** 行点击：播放控件/大图/按钮上的点击不劫持，其余展开详情 */
+function onGenTaskRowClick(row, ev) {
+  if (ev?.target?.closest?.('video, img, button, a, input, textarea, select')) return
+  toggleGenTaskDetail(row)
 }
 const imageViewer = ref({ open: false, src: '', title: '' })
 const activeMerge = ref(null) // 成片大预览弹窗中正在播放的拼接记录
@@ -2004,6 +2397,8 @@ function handleImageViewerKeydown(event) {
   if (event.key !== 'Escape') return
   if (imageViewer.value.open) closeImageViewer()
   else if (assetDetail.value.open) closeAssetDetail()
+  else if (videoDetailOpen.value) closeVideoDetail()
+  else if (clipPlayer.value) closeClipPlayer()
   else if (taskDrawer.value) closeTaskDrawer()
 }
 
@@ -2163,30 +2558,38 @@ function configModels(cfg) {
   if (Array.isArray(raw)) return raw.filter(Boolean)
   try { const m = JSON.parse(raw); return Array.isArray(m) ? m.filter(Boolean) : [m].filter(Boolean) } catch { return [raw].filter(Boolean) }
 }
-// 汇总该类型全部启用配置的模型（按 厂商+模型 去重，按优先级排序），选中模型时连同所属配置一起调用
-// 选中值使用 'provider/model' 复合键：同名模型可能来自不同厂商（如中转站与官方），必须区分
+// 汇总该类型全部启用配置的模型（按优先级排序），选中模型时连同所属配置一起调用
+// 选中值 = 'provider/model@配置id'：同名模型可能来自不同厂商，也可能来自同一厂商的不同配置
+// （例如同一 MiniMax-H3 既有官方直连也有私有中转）——必须带上配置 id，否则第二份配置的同一模型根本选不到
 function collectModelOptions(cfgs) {
   const seen = new Set()
   const out = []
   const sorted = [...cfgs].filter(c => c.is_active).sort((a, b) => (b.priority || 0) - (a.priority || 0))
   for (const c of sorted) {
     for (const m of configModels(c)) {
-      const key = `${c.provider}/${m}`
+      const key = `${c.provider}/${m}@${c.id}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ key, model: m, provider: c.provider, configId: c.id, configName: c.name || c.provider })
+      out.push({ key, model: m, provider: c.provider, configId: c.id, configName: c.name || '' })
     }
   }
   return out
 }
-// 复合键 → 裸模型名（后端适配器按厂商校验模型名，不能带 provider 前缀）
+// 复合键 → 裸模型名（后端适配器按厂商校验模型名，不能带 provider 前缀或 @配置id 后缀）
 function bareModelName(key) {
   if (!key) return ''
-  const i = key.indexOf('/')
-  return i >= 0 ? key.slice(i + 1) : key
+  const at = key.indexOf('@')
+  const bare = at >= 0 ? key.slice(0, at) : key
+  const i = bare.indexOf('/')
+  return i >= 0 ? bare.slice(i + 1) : bare
 }
 function ownerConfigId(options, key) {
-  return key ? (options.find(o => o.key === key)?.configId || undefined) : undefined
+  if (!key) return undefined
+  const exact = options.find(o => o.key === key)
+  if (exact) return exact.configId || undefined
+  // 兼容改造前存下的 'provider/model' 形式
+  const legacy = options.find(o => `${o.provider}/${o.model}` === key)
+  return legacy?.configId || undefined
 }
 function hasMultiConfigs(options) {
   return new Set(options.map(o => o.configId)).size > 1
@@ -2275,9 +2678,10 @@ function pruneStaleModel(modelRef, optionsRef) {
   watch(optionsRef, opts => {
     if (!modelRef.value || !opts.length) return
     if (opts.some(o => o.key === modelRef.value)) return
-    // 旧版本地存储只有裸模型名：能对上则升级为复合键，对不上回退默认
-    const legacy = opts.filter(o => o.model === modelRef.value)
-    modelRef.value = legacy.length ? legacy[0].key : ''
+    // 兼容旧版本地存储：裸模型名 → 升级为复合键；'provider/model' → 补上 @配置id
+    const legacy = opts.find(o => o.model === modelRef.value)
+      || opts.find(o => `${o.provider}/${o.model}` === modelRef.value)
+    modelRef.value = legacy ? legacy.key : ''
   }, { immediate: true })
 }
 pruneStaleModel(chatModel, textModelOptions)
@@ -2313,11 +2717,11 @@ async function loadGenTasks() {
     // 永不消退(videoTaskState 中 pending 优先于 failed,重试按钮还被禁用)
     const pending = new Set()
     const failed = {}
-    for (const [sbId, t] of latestBySb) {
+    for (const [sbId, task] of latestBySb) {
       // 分镜已有视频(失败后重试成功)时不再报历史错误
       if (hasVid(sbs.value.find(s => s.id === sbId))) continue
-      if (t.status === 'processing') pending.add(sbId)
-      else if (t.status === 'failed') failed[sbId] = t.error_msg || t('episode.status.failed')
+      if (task.status === 'processing') pending.add(sbId)
+      else if (task.status === 'failed') failed[sbId] = task.error_msg || t('episode.status.failed')
     }
     // 刚点击提交、任务记录尚未加载出来的本地状态保留,避免状态闪退
     for (const id of pendingVideoIds.value) if (!latestBySb.has(id)) pending.add(id)
@@ -2381,6 +2785,8 @@ const genTaskRows = computed(() => {
     prompt: t.prompt || '',
     createdAt: t.created_at || '',
     completedAt: t.completed_at || '',
+    // 原始行：详情面板需要 params/task_id/status 等未在上方展开的字段
+    raw: t,
   }))
   const mergeRows = genMerges.value.map(m => ({
     key: `merge-${m.id}`,
@@ -2395,6 +2801,7 @@ const genTaskRows = computed(() => {
     prompt: '',
     createdAt: m.created_at || '',
     completedAt: m.completed_at || '',
+    raw: m,
   }))
   return [...taskRows, ...mergeRows].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 })
@@ -3101,8 +3508,112 @@ async function loadSbVideoHistory() {
 
 watch(() => [selectedSb.value?.id, getVideoUrl(selectedSb.value)], () => { loadSbVideoHistory() })
 
+/** 点击历史项＝切换选择：大视频区域随即加载该条视频 */
 function previewHistoryVideo(t) {
   previewVideoUrl.value = isCurrentVideo(t) ? '' : taskVideoPath(t)
+}
+
+// ===== 生成详情弹框（数据来自 /tasks 原始行：prompt / model / provider / params / task_id）=====
+const videoDetailOpen = ref(false)
+const videoDetail = ref(null)
+
+/** 大视频区域当前加载的资源路径（选中历史版本优先，否则该分镜主视频） */
+function currentPlayerPath() {
+  return previewVideoUrl.value || getVideoUrl(selectedSb.value) || ''
+}
+
+/** 当前加载的视频对应的任务行；历史列表里找不到时退回本集任务（主视频可能不在最近 30 条里） */
+function currentPlayerTask() {
+  const path = currentPlayerPath()
+  if (!path) return null
+  return sbVideoHistory.value.find(t => taskVideoPath(t) === path)
+    || genTasks.value.find(t => t.type === 'video' && taskVideoPath(t) === path)
+    || null
+}
+
+function openVideoDetail() {
+  videoDetail.value = currentPlayerTask()
+  videoDetailOpen.value = true
+}
+function closeVideoDetail() {
+  videoDetailOpen.value = false
+  videoDetail.value = null
+}
+
+/** 弹框副标题：所属分镜 + 生成时间 */
+const videoDetailSubtitle = computed(() => {
+  const task = videoDetail.value
+  if (!task) return ''
+  const sb = sbs.value.find(s => s.id === Number(task.storyboard_id ?? task.storyboardId ?? 0))
+  const shot = sb ? t('episode.tasks.sbN', { n: sbNumber(sb) }) : ''
+  return [shot, historyTimeText(task).createdAt].filter(Boolean).join(' · ')
+})
+
+/** params 在库里是 TEXT：兼容「原始 JSON 字符串」与「已解析对象」两种形态 */
+function historyParams(t) {
+  const raw = t?.params
+  if (!raw) return {}
+  if (typeof raw === 'object') return raw
+  try { return JSON.parse(raw) || {} } catch { return {} }
+}
+const arrayLen = (v) => (Array.isArray(v) ? v.length : 0)
+
+function historyStatusLabel(task) {
+  const s = String(task?.status || '')
+  if (s === 'completed') return t('episode.status.done')
+  if (s === 'failed') return t('episode.status.failed')
+  if (s === 'processing' || s === 'pending') return t('episode.status.generating')
+  return t('episode.status.todo')
+}
+
+/** 紧凑耗时（语言无关）：92s → 1m32s */
+function formatElapsed(fromIso, toIso) {
+  if (!fromIso || !toIso) return ''
+  const ms = new Date(toIso).getTime() - new Date(fromIso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  const total = Math.round(ms / 1000)
+  if (total < 60) return `${total}s`
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  if (m < 60) return `${m}m${String(s).padStart(2, '0')}s`
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`
+}
+
+function historyTimeText(t) {
+  const created = taskCreatedAt(t)
+  const done = t?.completed_at || t?.completedAt || ''
+  const elapsed = formatElapsed(created, done)
+  const createdAt = created ? new Date(created).toLocaleString() : ''
+  const doneAt = done ? new Date(done).toLocaleString() : ''
+  return { createdAt, doneAt, elapsed }
+}
+
+/** 输出规格：720p · 12s · 16:9（缺项自动跳过） */
+function historyOutputSpec(t) {
+  const p = historyParams(t)
+  return [p.resolution, p.duration ? `${p.duration}s` : '', p.aspectRatio].filter(Boolean).join(' · ')
+}
+
+function historyRefSummary(t) {
+  const p = historyParams(t)
+  return {
+    images: arrayLen(p.referenceImageUrls),
+    videos: arrayLen(p.referenceVideoUrls),
+    audios: arrayLen(p.referenceAudioUrls),
+    voices: arrayLen(p.characterVoiceUrls),
+  }
+}
+
+async function copyHistoryPrompt(task) {
+  // 只认带 prompt 的任务对象（两个调用点都显式传入：详情弹框 / 任务列表行）
+  const text = task && typeof task === 'object' && typeof task.prompt === 'string' ? task.prompt : ''
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(t('episode.asset.promptCopied'))
+  } catch {
+    toast.error(t('episode.asset.copyFailed'))
+  }
 }
 
 async function setAsMainVideo() {
@@ -3116,11 +3627,13 @@ async function setAsMainVideo() {
   } catch (e) { toastError(e, { fallback: 'episode.vid.setMainFailed' }) }
 }
 
-async function removeHistoryVideo(t) {
+async function removeHistoryVideo(task) {
   try {
-    await taskAPI.del(t.id)
-    sbVideoHistory.value = sbVideoHistory.value.filter(x => x.id !== t.id)
-    if (previewVideoUrl.value === taskVideoPath(t)) previewVideoUrl.value = ''
+    await taskAPI.del(task.id)
+    sbVideoHistory.value = sbVideoHistory.value.filter(x => x.id !== task.id)
+    if (previewVideoUrl.value === taskVideoPath(task)) previewVideoUrl.value = ''
+    // 正在详情弹框里展示的就是它时，一并关掉
+    if (videoDetail.value && videoDetail.value.id === task.id) closeVideoDetail()
     toast.success(t('episode.vid.historyDeleted'))
   } catch (e) { toastError(e, { fallback: 'common.deleteFailed' }) }
 }
@@ -3599,14 +4112,14 @@ async function pollVideoGeneration(generationId, storyboardId) {
   }
   toast.error(t('episode.vid.genTimeout'))
 }
-async function doMerge(ids) {
+async function doMerge(ids, videoOverrides) {
   const storyboardIds = Array.isArray(ids) ? ids : undefined
   if (storyboardIds && !storyboardIds.length) {
     toast.error(t('episode.export.selectFirst'))
     return
   }
   try {
-    await mergeAPI.merge(epId.value, storyboardIds)
+    await mergeAPI.merge(epId.value, storyboardIds, videoOverrides)
     toast.success(t('episode.export.mergingToast'))
   } catch (e) {
     toastError(e, { fallback: 'episode.export.mergeFailed' })
@@ -5026,6 +5539,100 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
 }
 .video-history-item:hover .video-history-del,
 .video-history-item:focus-within .video-history-del { display: flex; }
+
+/* ===== 生成详情弹框（大视频区域「详情」按钮打开；行内详情见任务列表 .gen-task-detail） ===== */
+.video-detail-dialog {
+  width: min(640px, calc(100vw - 48px));
+  max-height: calc(100vh - 56px);
+  background: var(--header-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.video-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  overflow: auto;
+  min-height: 0;
+}
+.video-detail-empty {
+  padding: 28px 18px 32px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+/* ===== 生成信息块（任务列表行内详情 .gen-task-detail 复用同一套排版） ===== */
+.history-detail-panel {
+  margin-top: 10px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--overlay-track);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+.history-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.history-detail-title { font-size: 12px; font-weight: 700; color: var(--text-1); }
+.history-detail-grid {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.history-detail-grid dt { color: var(--text-3); font-weight: 600; }
+.history-detail-grid dd {
+  margin: 0;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  word-break: break-word;
+}
+.history-detail-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.history-detail-error-label { font-weight: 700; color: var(--error); }
+.history-detail-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.history-detail-prompt {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--overlay-track);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .video-task-player {
   min-width: 0;
   min-height: 0;
@@ -6000,6 +6607,29 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   pointer-events: none;
 }
 .merge-card.playable:hover .merge-card-play { opacity: 1; }
+/* 删除这条成片：常显但克制，hover 变红（点击不触发卡片播放） */
+.merge-card-del {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+.merge-card-del:hover { opacity: 1; background: var(--error, #d9534f); }
+.merge-card-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; opacity: 1; }
 .merge-viewer-dialog { width: min(1080px, calc(100vw - 56px)); }
 .merge-viewer-body {
   display: flex;
@@ -6023,61 +6653,128 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   font-size: 12px;
   text-align: center;
 }
-.export-grid {
+/* 导出选片：每个分镜一行，行内横向列出该分镜的全部历史版本（单选） */
+.export-rows {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  align-content: start;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.exp-card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px; border-radius: var(--radius); background: var(--surface-raised); border: 1px solid var(--border); }
-.exp-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-card); }
-.exp-card.playable { cursor: pointer; }
-.exp-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
-.exp-check {
-  position: absolute;
-  right: 6px;
-  top: 6px;
-  width: 18px;
-  height: 18px;
+.exp2-row {
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+}
+.exp2-row.playable:hover { border-color: var(--border-strong); box-shadow: var(--shadow-card); }
+/* 未选中的素材：虚线边框 + 头部「不参与拼接」标签，而不是把整块素材做成选中态 */
+.exp2-row.no-pick { border-style: dashed; background: transparent; }
+.exp2-row-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255,255,255,0.9);
-  background: rgba(0,0,0,0.35);
-  color: #fff;
+  gap: 8px;
+  min-width: 0;
 }
-.exp-check.on { background: var(--accent); border-color: var(--accent); }
-.exp-thumb {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border: 1px solid var(--surface-outline);
-  border-radius: 6px;
-  background: var(--media-surface);
-}
-.exp-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.exp-thumb-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-.exp-thumb-index {
-  position: absolute;
-  left: 5px;
-  top: 5px;
+.exp2-index {
+  flex-shrink: 0;
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(0,0,0,0.56);
-  color: #fff;
+  background: var(--overlay-track);
+  color: var(--text-2);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
 }
-.exp-thumb-duration {
+.exp2-title { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-1); }
+.exp2-duration { flex-shrink: 0; font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.exp2-version-count { flex-shrink: 0; font-size: 10.5px; }
+.exp2-not-picked {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-3);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.exp2-clips {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.exp2-clip {
+  position: relative;
+  flex-shrink: 0;
+  width: 116px;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: var(--media-surface);
+}
+/* 缩略图本体：点击＝弹框播放 */
+.exp2-clip-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.exp2-clip video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+/* hover 才浮现的播放暗示 */
+.exp2-clip-play {
   position: absolute;
-  right: 5px;
-  bottom: 5px;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.26);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+.exp2-clip:hover .exp2-clip-play,
+.exp2-clip-media:focus-visible .exp2-clip-play { opacity: 1; }
+.exp2-clip { transition: opacity 0.16s var(--ease-out), border-color 0.16s var(--ease-out); }
+.exp2-clip:hover { border-color: var(--border-strong); }
+/* 选中态只落在「本段选用的那个视频」上：未选版本压暗，选中的描边高亮 + 左上角勾选框打勾 */
+.exp2-row .exp2-clip:not(.on) { opacity: 0.62; }
+.exp2-row .exp2-clip:hover { opacity: 1; }
+.exp2-clip.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+/* 左上角勾选框：hover / 键盘聚焦 / 已选中时才出现 */
+.exp2-clip-check {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 17px;
+  height: 17px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px solid rgba(255,255,255,0.9);
+  border-radius: 5px;
+  background: rgba(0,0,0,0.5);
+  color: transparent;
+  cursor: pointer;
+}
+.exp2-clip:hover .exp2-clip-check,
+.exp2-clip:focus-within .exp2-clip-check,
+.exp2-clip-check.on { display: flex; }
+.exp2-clip-check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.exp2-clip-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.exp2-clip-time {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(0,0,0,0.6);
@@ -6085,26 +6782,18 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   font-family: var(--font-mono);
   font-size: 9px;
 }
-/* 镜头预览：悬停浮现的居中播放钮，点击打开预览弹窗（不影响卡片勾选） */
-.exp-play {
+.exp2-clip-main {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.9);
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.62);
-  color: #fff;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  right: 4px;
+  top: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 9px;
+  font-weight: 700;
 }
-.exp-card:hover .exp-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.exp-play:hover { background: var(--accent); }
+.exp2-empty { margin-top: 7px; font-size: 11px; color: var(--text-3); }
 /* 导出完成手动标记按钮 */
 .export-done-btn.on {
   background: var(--success-bg, var(--accent-bg));
@@ -6112,7 +6801,6 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   border-color: transparent;
   font-weight: 600;
 }
-.exp-row-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 /* Shared */
 .dim { color: var(--text-3); }
@@ -6209,10 +6897,25 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
 /* ===== 任务列表面板 ===== */
 .gen-task-row {
   grid-template-columns: 84px minmax(0, 1fr) auto;
-  cursor: default;
+  cursor: pointer;
+}
+.gen-task-row.is-open {
+  background: var(--bg-hover);
 }
 .gen-task-row .video-task-preview img {
   cursor: zoom-in;
+}
+/* 行内生成详情：行本身是 3 列 grid，详情整行跨列 */
+.gen-task-detail {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  max-height: 260px;
+}
+.gen-task-detail-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* 任务触发按钮(顶栏) */

@@ -345,6 +345,14 @@ export const stylePresetSeeds = [
     prompt: 'black and white manga illustration, high-contrast monochrome ink work, dynamic hatching and cross-hatching shading, bold solid blacks with dramatic negative space, screentone gray gradation, expressive confident ink linework, cinematic noir lighting, professional manga page quality, consistent character design across shots, strictly no color, avoid grayscale blur smudging, avoid painterly soft edges, avoid photorealism, avoid 3D render look',
     description: '黑白漫/ Noir 高对比墨水风',
   },
+  {
+    name: 'VOX 纸片拼贴', value: 'vox', sortOrder: 6,
+    // 参考 VOX paper-collage 的视觉语言：大面积纸面 + 受控撕裂边缘 + 分层剪贴 + 信息图表达。
+    // 注意：不写入「纯 #00ff00 绿幕抠图」那条——那是拼贴工程做遮罩用的，套到本项目的
+    // 角色/场景/道具出图上会把主体画到绿幕前。
+    prompt: 'VOX-style paper-collage editorial illustration, clean cut-paper collage built from large flat paper planes with controlled torn edges, layered cutouts with explicit foreground / subject / background depth, soft drop shadows so every paper piece floats just above the layer beneath, subtle deliberate rotation on individual pieces, limited matte editorial palette anchored on deep indigo #071826, rice paper #E8D6B8, bronze #A6723F, cinnabar #A33A2B, mist blue #7EA7B8, warm white #F7F2E8 and ink black #171512 accents, one focal subject with one supporting action and one environmental detail per scene, explanatory infographic vocabulary of maps, process chains, cross-sections, exploded diagrams, magnitude counters and bottleneck or failure states, restrained annotation leader lines kept clear of faces and hands, even soft lighting, spotless paper backgrounds, crisp edges, pure controlled colors, refined materials, polished editorial finish, consistent character design across shots, no text rendered in the image, avoid photorealistic rendering, avoid 3D CGI look, avoid anime cel shading, avoid painterly soft blending, avoid random tape, avoid decorative mask and line clutter, avoid persistent zoom and meaningless shake, avoid grain, noise, dust, stains, dirty texture, mottled spots, film grain, compression artifacts, pixelation, oversharpening, distressed aging, random fibers, excessive fragments, visual clutter, watermark, logo, unintended text',
+    description: 'VOX 纸片拼贴科普风：大面积纸面 + 受控撕裂边缘 + 分层剪贴，优先地图/流程链/剖面/计数器等信息图表达',
+  },
 ]
 
 /**

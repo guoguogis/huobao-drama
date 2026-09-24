@@ -814,7 +814,26 @@
       "confirmNote": "将按以上配置逐镜头发起生成；失败的任务之后可点「重试失败」一键重跑。",
       "confirmStart": "开始生成 ({n})",
       "selectMissing": "选未生成",
-      "aspectRatio": "画面比例"
+      "aspectRatio": "画面比例",
+      "detailTitle": "生成详情",
+      "detailModel": "模型",
+      "detailOutput": "输出规格",
+      "detailRefs": "参考素材",
+      "detailRefImages": "图片",
+      "detailRefVideos": "视频",
+      "detailRefAudios": "音频",
+      "detailVoiceSamples": "+ 角色音色样本 {n}",
+      "detailAudio": "生成音频",
+      "detailAudioOn": "已生成",
+      "detailStatus": "状态",
+      "detailUpstream": "上游任务 ID",
+      "detailTiming": "时间",
+      "detailElapsed": "耗时 {dur}",
+      "detailError": "失败原因",
+      "detailPrompt": "生成时的提示词",
+      "detailCopyPrompt": "复制提示词",
+      "detailNoPrompt": "这条记录没有留存的提示词",
+      "detailNoRecord": "这条视频没有找到生成记录（可能来自更早的数据或拼接产物）"
     },
     "inspector": {
       "videoPromptPlaceholder": "用 {'@'}角色名 / {'@'}场景名 引用参考素材，生成时自动映射为参考图片；再按时间段描述画面运动与镜头…",
@@ -846,7 +865,8 @@
       "sbN": "分镜 #{n}",
       "generic": "通用",
       "fullMerge": "整集拼接",
-      "mergeKind": "合并"
+      "mergeKind": "合并",
+      "openInPlayer": "在播放器中打开"
     },
     "export": {
       "notReadyDesc": "请先完成分镜和制作流程",
@@ -870,7 +890,18 @@
       "markedDone": "已完成",
       "markDoneTitle": "手动标记本集导出完成（可再次点击取消）",
       "markedDoneToast": "已标记为完成",
-      "unmarkDoneToast": "已取消完成标记"
+      "unmarkDoneToast": "已取消完成标记",
+      "versionCount": "{n} 个版本",
+      "noVideo": "未生成视频",
+      "pickClip": "选用此版本参与拼接（同一镜头只能选一个）；再点已选版本＝该镜头不参与拼接",
+      "playClip": "点击播放该片段",
+      "mainBadge": "主视频",
+      "notIncluded": "未选 · 不参与拼接",
+      "delMerge": "删除这条成片",
+      "deleteTitle": "删除成片",
+      "deleteMessage": "确定删除成片「{name}」吗？列表中的这条记录会被移除，磁盘上的视频文件仍保留。",
+      "deleteDone": "已删除该成片记录",
+      "noShotVideos": "本集还没有已生成的视频镜头"
     },
     "image": {
       "generatingChar": "角色图片生成中",

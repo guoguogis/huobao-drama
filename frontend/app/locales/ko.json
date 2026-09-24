@@ -814,7 +814,26 @@
       "confirmNote": "위 설정으로 샷별로 생성을 시작합니다. 실패한 작업은 나중에 「실패 재시도」로 한 번에 다시 실행할 수 있습니다.",
       "confirmStart": "생성 시작 ({n})",
       "selectMissing": "미생성 선택",
-      "aspectRatio": "화면 비율"
+      "aspectRatio": "화면 비율",
+      "detailTitle": "생성 상세",
+      "detailModel": "모델",
+      "detailOutput": "출력 사양",
+      "detailRefs": "참조 소재",
+      "detailRefImages": "이미지",
+      "detailRefVideos": "영상",
+      "detailRefAudios": "오디오",
+      "detailVoiceSamples": "+ 캐릭터 음성 샘플 {n}",
+      "detailAudio": "오디오 생성",
+      "detailAudioOn": "생성됨",
+      "detailStatus": "상태",
+      "detailUpstream": "업스트림 작업 ID",
+      "detailTiming": "시간",
+      "detailElapsed": "{dur} 소요",
+      "detailError": "실패 사유",
+      "detailPrompt": "생성 당시 프롬프트",
+      "detailCopyPrompt": "프롬프트 복사",
+      "detailNoPrompt": "이 기록에는 프롬프트가 없습니다",
+      "detailNoRecord": "이 영상의 생성 기록을 찾을 수 없습니다(이전 데이터이거나 병합 결과물일 수 있습니다)"
     },
     "inspector": {
       "videoPromptPlaceholder": "{'@'}캐릭터명 / {'@'}장멸명 으로 참조 소재를 지정(생성 시 참조 이미지로 자동 매핑). 시간대별로 화면의 움직임과 침라를 기술…",
@@ -846,7 +865,8 @@
       "sbN": "스토리보드 #{n}",
       "generic": "일반",
       "fullMerge": "화 전체 병합",
-      "mergeKind": "병합"
+      "mergeKind": "병합",
+      "openInPlayer": "플레이어에서 열기"
     },
     "export": {
       "notReadyDesc": "먼저 스토리보드와 제작 단계를 완료하세요",
@@ -870,7 +890,18 @@
       "markedDone": "완료됨",
       "markDoneTitle": "이 에피소드의 납출을 수동으로 완료 표시(다시 클릭하면 해제)",
       "markedDoneToast": "완료로 표시했습니다",
-      "unmarkDoneToast": "완료 표시를 해제했습니다"
+      "unmarkDoneToast": "완료 표시를 해제했습니다",
+      "versionCount": "{n}개 버전",
+      "noVideo": "영상 없음",
+      "pickClip": "이 버전으로 병합(컷당 1개) / 선택된 버전을 다시 누르면 이 컷 제외",
+      "playClip": "클릭하여 이 클립 재생",
+      "mainBadge": "메인",
+      "notIncluded": "미선택",
+      "delMerge": "이 완성 영상 삭제",
+      "deleteTitle": "완성 영상 삭제",
+      "deleteMessage": "완성 영상 \"{name}\"을(를) 삭제할까요? 목록에서 이 기록만 사라지고 디스크의 영상 파일은 유지됩니다.",
+      "deleteDone": "완성 영상 기록을 삭제했습니다",
+      "noShotVideos": "이 에피소드에는 아직 생성된 컷 영상이 없습니다"
     },
     "image": {
       "generatingChar": "캐릭터 이미지 생성 중",

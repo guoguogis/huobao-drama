@@ -138,9 +138,14 @@ export const uploadAPI = {
   audio: (f: File) => uploadReq<{ url: string; path: string }>('/upload/audio', f),
 }
 export const mergeAPI = {
-  merge: (epId: number, storyboardIds?: number[]) => api.post(`/merge/episodes/${epId}/merge`, storyboardIds?.length ? { storyboard_ids: storyboardIds } : {}),
+  merge: (epId: number, storyboardIds?: number[], videoOverrides?: Record<number, string>) => api.post(`/merge/episodes/${epId}/merge`, {
+    ...(storyboardIds?.length ? { storyboard_ids: storyboardIds } : {}),
+    // 指定每个分镜用哪个历史版本拼接（只允许站内 static 路径，后端会校验）
+    ...(videoOverrides && Object.keys(videoOverrides).length ? { video_overrides: videoOverrides } : {}),
+  }),
   status: (epId: number) => api.get(`/merge/episodes/${epId}/merge`),
   list: (epId: number) => api.get<any[]>(`/merge/episodes/${epId}/merges`),
+  remove: (id: number) => api.del(`/merge/merges/${id}`),
 }
 export const aiConfigAPI = {
   list: (t?: string) => api.get(`/ai-configs${t ? `?service_type=${t}` : ''}`),
