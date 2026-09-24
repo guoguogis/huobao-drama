@@ -226,6 +226,44 @@ test('片段播放文案四种语言都有', () => {
   }
 })
 
+test('点「重绘」后历史条挂出一条「生成中」记录且被选中', () => {
+  // 生成中的任务还没有成品路径，也要留在历史里
+  assert.match(episode, /function isVideoTaskPending\(t\) \{/)
+  assert.match(episode, /function isHistoryGenerating\(t\) \{ return !taskVideoPath\(t\) && isVideoTaskPending\(t\) \}/)
+  assert.match(episode, /\.filter\(t => !!taskVideoPath\(t\) \|\| isVideoTaskPending\(t\)\)/)
+  // 选中态：显式选中 > 最新生成中记录 > 当前主视频（生成中记录没有路径，不能靠 previewVideoUrl 表达）
+  assert.match(episode, /const selectedHistoryId = ref\(0\)/)
+  assert.match(episode, /function isHistorySelected\(t\) \{/)
+  assert.match(episode, /const generating = sbVideoHistory\.value\.find\(x => isHistoryGenerating\(x\)\)/)
+  // 提交生成后立刻挂出记录并选中它
+  assert.match(episode, /selectedHistoryId\.value = generation\.id/)
+  assert.match(episode, /if \(generation\?\.id && sb\.id === selectedSb\.value\?\.id\) \{/)
+  // 模板：占位块 + 生成中徽标；生成中的任务不给删除入口（删掉在跑的任务会让轮询失联）
+  assert.match(episode, /<div v-else class="video-history-loading">/)
+  assert.match(episode, /class="video-history-badge is-pending">\{\{ t\('episode\.status\.generating'\) \}\}/)
+  assert.match(episode, /v-if="!isHistoryGenerating\(h\)"/)
+  assert.match(episode, /\.video-history-item\.selected \{/)
+  // 失败/超时后刷新历史，避免留下一条假的「生成中」
+  assert.match(episode, /if \(storyboardId === selectedSb\.value\?\.id\) await loadSbVideoHistory\(\)/)
+})
+
+test('主视频窗口跟随历史条的选中：选中「生成中」记录时显示生成态', () => {
+  // 选中记录（可能是还没有成品的生成中记录）
+  assert.match(episode, /const selectedHistoryTask = computed\(\(\) => sbVideoHistory\.value\.find\(t => isHistorySelected\(t\)\) \|\| null\)/)
+  assert.match(episode, /const selectedHistoryGenerating = computed\(/)
+  // videoTaskState 只要有视频就返回 done，重绘期间会一直显示「已完成」，故播放器/检查器另取选中态
+  assert.match(episode, /const selectedVideoState = computed\(\(\) => \(selectedHistoryGenerating\.value \? 'pending' : videoTaskState\(selectedSb\.value\)\)\)/)
+  // 播放区：生成态优先于「继续放旧主视频」
+  assert.match(episode, /<div v-if="selectedHistoryGenerating" class="video-player-empty">/)
+  assert.match(episode, /<video\r?\n\s+v-else-if="previewVideoUrl \|\| hasVid\(selectedSb\)"/)
+  // 头部状态与检查器按钮都按选中状态走（重绘期间显示生成中并禁用，避免重复提交）
+  assert.match(episode, /:class="\['video-task-status', 'is-' \+ selectedVideoState\]"/)
+  assert.match(episode, /:disabled="selectedVideoState === 'pending'"/)
+  assert.match(episode, /videoActionLabel\(selectedVideoState\)/)
+  // 详情也跟随选中：生成中的记录同样能看参数与提示词
+  assert.match(episode, /function currentPlayerTask\(\) \{\r?\n\s*if \(selectedHistoryTask\.value\) return selectedHistoryTask\.value/)
+})
+
 test('成片列表支持删除（二次确认 + 调后端接口 + 立即从列表移除）', () => {
   const useApi = readApp('composables/useApi.ts')
   // 卡片上的删除按钮：不能触发卡片的播放点击

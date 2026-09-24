@@ -712,6 +712,7 @@
       "generatingProgress": "生成中 {done}/{total}",
       "generateSelected": "生成视频提示词({n})",
       "shotN": "分镜 #{n}",
+      "shotLabel": "分镜{n}：{name}",
       "totalCount": "共 {n} 个",
       "duration": "时长",
       "descSection": "分镜描述",

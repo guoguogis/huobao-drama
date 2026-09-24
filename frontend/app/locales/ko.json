@@ -712,6 +712,7 @@
       "generatingProgress": "생성 중 {done}/{total}",
       "generateSelected": "영상 프롬프트 생성({n})",
       "shotN": "스토리보드 #{n}",
+      "shotLabel": "스토리보드 {n}: {name}",
       "totalCount": "총 {n}개",
       "duration": "길이",
       "descSection": "스토리보드 설명",

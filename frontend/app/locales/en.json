@@ -712,6 +712,7 @@
       "generatingProgress": "Generating {done}/{total}",
       "generateSelected": "Generate video prompts ({n})",
       "shotN": "Shot #{n}",
+      "shotLabel": "Shot {n}: {name}",
       "totalCount": "{n} in total",
       "duration": "Duration",
       "descSection": "Shot Description",

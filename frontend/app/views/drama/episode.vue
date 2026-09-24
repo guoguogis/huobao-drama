@@ -694,9 +694,9 @@
               <div class="video-player-head">
                 <div class="video-player-head-info">
                   <div class="video-player-title">{{ t('episode.vid.playerTitle', { n: String(selectedVideoTaskNumber).padStart(2, '0') }) }}</div>
-                  <span :class="['video-task-status', 'is-' + videoTaskState(selectedSb)]">
-                    <span :class="['dot', videoTaskState(selectedSb) === 'done' && 'ok', videoTaskState(selectedSb) === 'pending' && 'pending']" />
-                    {{ videoTaskStatusLabel(selectedSb) }}
+                  <span :class="['video-task-status', 'is-' + selectedVideoState]">
+                    <span :class="['dot', selectedVideoState === 'done' && 'ok', selectedVideoState === 'pending' && 'pending']" />
+                    {{ videoStatusLabel(selectedVideoState) }}
                   </span>
                   <span v-if="selectedSb.duration" class="video-player-sub">{{ selectedSb.duration }}s</span>
                 </div>
@@ -718,8 +718,16 @@
                 </button>
               </div>
               <div class="video-player-stage">
+                <!-- 选中的是「生成中」那条记录：主窗口跟随选择显示生成态，而不是继续放旧主视频 -->
+                <div v-if="selectedHistoryGenerating" class="video-player-empty">
+                  <Loader2 :size="22" class="animate-spin" />
+                  <div class="video-player-empty-copy">
+                    <div class="video-player-empty-title">{{ t('episode.vid.emptyGenerating') }}</div>
+                    <div class="video-player-empty-desc">{{ t('episode.vid.emptyGeneratingDesc') }}</div>
+                  </div>
+                </div>
                 <video
-                  v-if="previewVideoUrl || hasVid(selectedSb)"
+                  v-else-if="previewVideoUrl || hasVid(selectedSb)"
                   :key="previewVideoUrl || getVideoUrl(selectedSb)"
                   :src="'/' + (previewVideoUrl || getVideoUrl(selectedSb))"
                   :poster="posterOf('/' + (previewVideoUrl || getVideoUrl(selectedSb))) || undefined"
@@ -754,18 +762,30 @@
                 <div
                   v-for="h in sbVideoHistory"
                   :key="h.id"
-                  :class="['video-history-item', { current: isCurrentVideo(h), viewing: !!previewVideoUrl && previewVideoUrl === taskVideoPath(h) }]"
+                  :class="['video-history-item', { current: isCurrentVideo(h), viewing: !!previewVideoUrl && previewVideoUrl === taskVideoPath(h), selected: isHistorySelected(h), generating: isHistoryGenerating(h) }]"
                   role="button"
                   tabindex="0"
                   @click="previewHistoryVideo(h)"
                   @keydown.enter.prevent="previewHistoryVideo(h)"
                 >
-                  <video :src="'/' + taskVideoPath(h)" :poster="posterOf('/' + taskVideoPath(h)) || undefined" preload="none" muted playsinline tabindex="-1" />
+                  <video
+                    v-if="taskVideoPath(h)"
+                    :src="'/' + taskVideoPath(h)"
+                    :poster="posterOf('/' + taskVideoPath(h)) || undefined"
+                    preload="none" muted playsinline tabindex="-1"
+                  />
+                  <!-- 生成中的记录还没有成品：占位 + 转圈，选中后即为「正在生成的这一条」 -->
+                  <div v-else class="video-history-loading"><Loader2 :size="15" class="animate-spin" /></div>
                   <span class="video-history-time">{{ formatHistoryTime(taskCreatedAt(h)) }}</span>
-                  <span v-if="isCurrentVideo(h)" class="video-history-badge">{{ t('episode.vid.current') }}</span>
+                  <span v-if="isHistoryGenerating(h)" class="video-history-badge is-pending">{{ t('episode.status.generating') }}</span>
+                  <span v-else-if="isCurrentVideo(h)" class="video-history-badge">{{ t('episode.vid.current') }}</span>
                   <!-- 每条记录都可删除：当前主视频同样可删——后端只删 sys_task 记录、不删文件，
-                       故 storyboard.video_url 指向的视频仍然可播，不会把分镜删坏 -->
-                  <button type="button" class="video-history-del" :title="t('episode.vid.deleteRecord')" @click.stop="removeHistoryVideo(h)">×</button>
+                       故 storyboard.video_url 指向的视频仍然可播，不会把分镜删坏。
+                       生成中的任务不给删除入口：删掉在跑的任务会让轮询失联 -->
+                  <button
+                    v-if="!isHistoryGenerating(h)"
+                    type="button" class="video-history-del" :title="t('episode.vid.deleteRecord')" @click.stop="removeHistoryVideo(h)"
+                  >×</button>
                 </div>
               </div>
             </div>
@@ -818,10 +838,10 @@
                   </div>
                   <button
                     class="btn btn-primary video-inspector-action"
-                    :disabled="videoTaskState(selectedSb) === 'pending'"
+                    :disabled="selectedVideoState === 'pending'"
                     @click="genVid(selectedSb)"
                   >
-                    {{ videoTaskActionLabel(selectedSb) }}
+                    {{ videoActionLabel(selectedVideoState) }}
                   </button>
                 </div>
               </aside>
@@ -959,7 +979,7 @@
                 >
                   <div class="exp2-row-head">
                     <span class="exp2-index">#{{ String(sbNumber(sb)).padStart(2,'0') }}</span>
-                    <span class="exp2-title truncate">{{ sb.description || sb.title || '—' }}</span>
+                    <span class="exp2-title truncate" :title="sb.description || ''">{{ sbName(sb) || t('episode.sb.shotN', { n: sbNumber(sb) }) }}</span>
                     <span v-if="sb.duration" class="exp2-duration">{{ sb.duration }}s</span>
                     <span v-if="!isExportSelected(sb)" class="exp2-not-picked">{{ t('episode.export.notIncluded') }}</span>
                     <span class="dim exp2-version-count">{{ t('episode.export.versionCount', { n: exportSbClips(sb).length }) }}</span>
@@ -1780,6 +1800,26 @@ function sbNumber(sb) {
   return Number.isFinite(n) && n > 0 ? n : (sbs.value.findIndex(s => s.id === sb?.id) + 1)
 }
 
+/**
+ * 分镜名（不含编号）：优先用户可读的 shot.title。
+ *
+ * description 不能直接当标题：拆解出来的描述以「【镜头1】…【镜头2】…」的**子镜头标记**开头，
+ * 每个分镜都从「【镜头1】」起头，列表里就会看起来每条都叫「镜头1」。
+ * 只有在没有 title 时才退回 description，并把开头的子镜头标记剥掉。
+ */
+function sbName(sb) {
+  const title = String(sb?.title || '').trim()
+  if (title) return title
+  return String(sb?.description || '').trim().replace(/^(?:【[^】]{1,10}】\s*)+/, '')
+}
+
+/** 分镜标签（带镜号）：分镜1：雨中采药；没有名字时退回「分镜 #1」 */
+function sbLabel(sb, n = 0) {
+  const num = n || sbNumber(sb) || 1
+  const name = sbName(sb)
+  return name ? t('episode.sb.shotLabel', { n: num, name }) : t('episode.sb.shotN', { n: num })
+}
+
 const exportReadyIds = computed(() => sbs.value.filter(s => exportSbClips(s).length).map(s => s.id))
 const exportSelectedReadyIds = computed(() => exportReadyIds.value.filter(id => !!exportPickBySb.value[id]))
 /** 导出列表只显示「有视频任务」的镜头 */
@@ -2149,6 +2189,39 @@ function closeAssetDetail() {
   assetPromptDirty.value = false
 }
 
+/** 某类资产的当前列表（refresh() 会整体换数组换对象，不能长期持有行对象） */
+function assetListOf(type) {
+  return type === 'character' ? chars.value : type === 'scene' ? scenes.value : propItems.value
+}
+
+/**
+ * 弹窗打开时抓的是列表行的快照，而 refresh() 每次都用新数组 + 新对象整体替换
+ * chars/scenes/props —— 于是「生成形象」完成、新图只写进刷新后的新行时，
+ * 弹窗仍读旧快照，表现为「只有生成状态、不见图片」。列表一刷新就把弹窗项重新指向同一 id 的当前行。
+ */
+watch([chars, scenes, propItems], () => {
+  const detail = assetDetail.value
+  if (!detail.open || !detail.item?.id) return
+  const live = assetListOf(detail.type).find(x => x.id === detail.item.id)
+  if (live && live !== detail.item) assetDetail.value = { ...detail, item: live }
+})
+
+/** 把补丁写到「当前列表里的那一行」；弹窗按 id 指向同一行，故随之更新 */
+function patchAssetRow(type, id, patch) {
+  const target = assetListOf(type).find(x => x.id === id)
+  if (target) {
+    Object.assign(target, patch)
+    return target
+  }
+  // 列表里找不到（理论上不会）时退回弹窗项，避免本地改动直接丢失
+  const detail = assetDetail.value
+  if (detail.open && detail.type === type && detail.item?.id === id) {
+    Object.assign(detail.item, patch)
+    return detail.item
+  }
+  return null
+}
+
 // ─── 手动新增资产 ────────────────────────────────────────────
 // 类型短显示名渲染时求值（不模块级固化），逻辑判断一律用 kind code
 const assetKindLabelMap = computed(() => ({
@@ -2230,15 +2303,9 @@ const assetFinalPrompt = computed(() => {
   return item?.final_prompt || item?.finalPrompt || ''
 })
 
-/** 把生成好的最终提示词同步到列表项与弹窗项 */
+/** 把生成好的最终提示词同步到列表项（弹窗按 id 指向同一行，随之更新） */
 function applyFinalPrompt(type, id, fp) {
-  const patch = { final_prompt: fp, finalPrompt: fp }
-  const list = type === 'character' ? chars.value : type === 'scene' ? scenes.value : propItems.value
-  const target = list.find(x => x.id === id)
-  if (target) Object.assign(target, patch)
-  if (assetDetail.value.open && assetDetail.value.type === type && assetDetail.value.item?.id === id) {
-    Object.assign(assetDetail.value.item, patch)
-  }
+  patchAssetRow(type, id, { final_prompt: fp, finalPrompt: fp })
 }
 
 const generatingPromptKeys = ref([])
@@ -2333,10 +2400,7 @@ async function saveAssetDetail() {
     // 本地同步：手动编辑的提示词以草稿为准；仅信息字段变更时提示词已被后端置空
     const { final_prompt, ...infoPatch } = payload
     const promptValue = assetPromptDirty.value ? (payload.final_prompt || null) : (infoChanged ? null : (item.final_prompt || item.finalPrompt || null))
-    Object.assign(item, infoPatch, { final_prompt: promptValue, finalPrompt: promptValue })
-    const list = detail.type === 'character' ? chars.value : detail.type === 'scene' ? scenes.value : propItems.value
-    const target = list.find(x => x.id === item.id)
-    if (target) Object.assign(target, infoPatch, { final_prompt: promptValue, finalPrompt: promptValue })
+    patchAssetRow(detail.type, item.id, { ...infoPatch, final_prompt: promptValue, finalPrompt: promptValue })
     if (assetPromptDirty.value) assetPromptDraft.value = payload.final_prompt || ''
     assetPromptDirty.value = false
     toast.success(t('episode.asset.saved'))
@@ -2436,19 +2500,26 @@ function videoTaskState(sb) {
   return 'ready'
 }
 
-function videoTaskStatusLabel(sb) {
-  const state = videoTaskState(sb)
+function videoStatusLabel(state) {
   if (state === 'done') return t('episode.status.done')
   if (state === 'pending') return t('episode.status.generating')
   if (state === 'failed') return t('episode.status.failed')
   return t('episode.status.todo')
 }
 
-function videoTaskActionLabel(sb) {
-  const state = videoTaskState(sb)
+function videoTaskStatusLabel(sb) {
+  return videoStatusLabel(videoTaskState(sb))
+}
+
+/** 生成按钮文案：按状态取（状态可能来自选中记录，而不是分镜自身） */
+function videoActionLabel(state) {
   if (state === 'done') return t('episode.asset.regen')
   if (state === 'pending') return t('episode.asset.generating')
   return t('episode.asset.generate')
+}
+
+function videoTaskActionLabel(sb) {
+  return videoActionLabel(videoTaskState(sb))
 }
 
 const allVideoTaskRows = computed(() => sbs.value.map((sb, index) => {
@@ -2459,7 +2530,8 @@ const allVideoTaskRows = computed(() => sbs.value.map((sb, index) => {
     id: sb.id,
     index,
     storyboard: sb,
-    title: sb.description || t('episode.vid.shotN', { n: String(index + 1).padStart(2, '0') }),
+    // 标题带镜号：分镜1：雨中采药（description 以「【镜头1】…」子镜头标记开头，不能直接当标题）
+    title: sbLabel(sb, index + 1),
     meta: sceneName,
     duration: Number.isFinite(duration) ? duration : 5,
     referenceCount,
@@ -3489,27 +3561,60 @@ function hasVid(s) { return !!getVideoUrl(s) }
 // ===== 分镜视频历史（一个分镜可能生成多个视频,sys_task 留存全部记录）=====
 const sbVideoHistory = ref([])
 const previewVideoUrl = ref('') // 正在预览的历史视频(相对路径);空 = 预览当前主视频
+// 历史条里被选中的那条记录：生成中的记录还没有成品路径，无法靠 previewVideoUrl 表达选中
+const selectedHistoryId = ref(0)
 
 // 注意:/tasks 返回原始行(camelCase),/episodes/:id/generation-tasks 返回 snake_case,两种命名都兼容
 function taskVideoPath(t) { return t?.local_path || t?.localPath || t?.result_url || t?.resultUrl || '' }
 function taskCreatedAt(t) { return t?.created_at || t?.createdAt || '' }
 function isCurrentVideo(t) { const p = taskVideoPath(t); return !!p && p === getVideoUrl(selectedSb.value) }
+/** 任务是否还没结束（completed / failed 之外都算在生成中） */
+function isVideoTaskPending(t) {
+  const s = String(t?.status || '')
+  return s !== 'completed' && s !== 'failed'
+}
+/** 历史条里「正在生成」的那条：只有状态、还没成品路径 */
+function isHistoryGenerating(t) { return !taskVideoPath(t) && isVideoTaskPending(t) }
+
+/** 历史条选中态：显式选中 > 最新一条生成中记录 > 当前主视频 */
+function isHistorySelected(t) {
+  if (selectedHistoryId.value) return t.id === selectedHistoryId.value
+  const generating = sbVideoHistory.value.find(x => isHistoryGenerating(x))
+  if (generating) return t.id === generating.id
+  return isCurrentVideo(t)
+}
+
+/** 当前选中的那条历史记录（可能是还没有成品的「生成中」记录） */
+const selectedHistoryTask = computed(() => sbVideoHistory.value.find(t => isHistorySelected(t)) || null)
+/** 选中的正是生成中那条：主视频窗口跟随选择，显示生成态而不是旧主视频 */
+const selectedHistoryGenerating = computed(() => !!selectedHistoryTask.value && isHistoryGenerating(selectedHistoryTask.value))
+/**
+ * 播放器/检查器使用的状态：选中的是生成中的记录时按「生成中」处理。
+ * videoTaskState 只要分镜有视频就返回 done，重绘期间会一直显示「已完成」，与历史条的选中态不一致。
+ */
+const selectedVideoState = computed(() => (selectedHistoryGenerating.value ? 'pending' : videoTaskState(selectedSb.value)))
 
 async function loadSbVideoHistory() {
   previewVideoUrl.value = ''
-  if (!selectedSb.value?.id) { sbVideoHistory.value = []; return }
+  if (!selectedSb.value?.id) { sbVideoHistory.value = []; selectedHistoryId.value = 0; return }
   try {
     const rows = await taskAPI.list({ type: 'video', storyboard_id: selectedSb.value.id })
     sbVideoHistory.value = (Array.isArray(rows) ? rows : [])
-      .filter(t => t.status === 'completed' && taskVideoPath(t))
+      // 生成中的任务也要列出来（还没有成品路径）：点「重绘」后要能立刻看到一条正在生成的记录
+      .filter(t => !!taskVideoPath(t) || isVideoTaskPending(t))
       .sort((a, b) => taskCreatedAt(b).localeCompare(taskCreatedAt(a)))
   } catch { sbVideoHistory.value = [] }
+  // 选中的那条已被删掉时清空显式选中，让选中态回落到生成中记录 / 主视频
+  if (selectedHistoryId.value && !sbVideoHistory.value.some(t => t.id === selectedHistoryId.value)) {
+    selectedHistoryId.value = 0
+  }
 }
 
 watch(() => [selectedSb.value?.id, getVideoUrl(selectedSb.value)], () => { loadSbVideoHistory() })
 
-/** 点击历史项＝切换选择：大视频区域随即加载该条视频 */
+/** 点击历史项＝切换选择：大视频区域随即加载该条视频（生成中的记录没有成品，播放器保持当前主视频） */
 function previewHistoryVideo(t) {
+  selectedHistoryId.value = t.id || 0
   previewVideoUrl.value = isCurrentVideo(t) ? '' : taskVideoPath(t)
 }
 
@@ -3522,8 +3627,9 @@ function currentPlayerPath() {
   return previewVideoUrl.value || getVideoUrl(selectedSb.value) || ''
 }
 
-/** 当前加载的视频对应的任务行；历史列表里找不到时退回本集任务（主视频可能不在最近 30 条里） */
+/** 当前加载的视频对应的任务行：优先「历史条上选中的那条」（生成中的记录也有参数可看），否则按路径兜底 */
 function currentPlayerTask() {
+  if (selectedHistoryTask.value) return selectedHistoryTask.value
   const path = currentPlayerPath()
   if (!path) return null
   return sbVideoHistory.value.find(t => taskVideoPath(t) === path)
@@ -4062,6 +4168,11 @@ async function genVid(sb, opts = {}) {
     const generation = await taskAPI.generate({ type: 'video', ...params })
     if (!opts.silent) toast.success(t('episode.vid.generating'))
     await refresh()
+    // 重绘：立刻在历史条上挂出这次「生成中」的记录并选中它（否则要等成品出来才看得见）
+    if (generation?.id && sb.id === selectedSb.value?.id) {
+      selectedHistoryId.value = generation.id
+      await loadSbVideoHistory()
+    }
     pollVideoGeneration(generation?.id, sb.id)
   } catch (e) {
     pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== sb.id)
@@ -4101,6 +4212,8 @@ async function pollVideoGeneration(generationId, storyboardId) {
           [storyboardId]: errMsg,
         }
         toastError(errMsg, { fallback: 'episode.vid.genFailed' })
+        // 失败的任务没有成品路径，会从历史条上消失：立刻刷新，避免留下一条假的「生成中」
+        if (storyboardId === selectedSb.value?.id) await loadSbVideoHistory()
         return
       }
     } catch {}
@@ -4111,6 +4224,7 @@ async function pollVideoGeneration(generationId, storyboardId) {
     [storyboardId]: t('episode.vid.genTimeout'),
   }
   toast.error(t('episode.vid.genTimeout'))
+  if (storyboardId === selectedSb.value?.id) await loadSbVideoHistory()
 }
 async function doMerge(ids, videoOverrides) {
   const storyboardIds = Array.isArray(ids) ? ids : undefined
@@ -5496,6 +5610,26 @@ onMounted(() => setTimeout(() => autoTour('episode', EPISODE_TOUR, t), 900))
 .video-history-item.viewing {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* 历史条选中态（含生成中那条）：与「正在预览」同为强调描边 */
+.video-history-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* 生成中的占位：还没有成品可当封面 */
+.video-history-loading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-muted);
+  color: var(--text-3);
+}
+.video-history-badge.is-pending {
+  background: var(--surface-raised);
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .video-history-time {
   position: absolute;
