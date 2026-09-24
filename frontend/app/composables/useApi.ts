@@ -150,6 +150,13 @@ export const aiConfigAPI = {
   test: (d: any) => api.post('/ai-configs/test', d),
 }
 
+/** 音频（TTS）：用已配置的音频服务 + 音色编号合成音色样本 */
+export const audioAPI = {
+  providers: () => api.get('/audio/providers'),
+  synthesize: (d: { text: string; voice_id?: string; emotion?: string; config_id?: number; format?: 'mp3' | 'wav'; speed?: number }) =>
+    api.post('/audio/synthesize', d),
+}
+
 // lang 缺省/为 zh 时读写基础版（不带 query，保持原请求形态）
 const langQ = (lang?: string) => (lang && lang !== 'zh' ? `?lang=${lang}` : '')
 

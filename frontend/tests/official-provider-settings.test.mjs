@@ -72,7 +72,8 @@ test('settings page offers official default model IDs', () => {
   assert.doesNotMatch(settingsPage, /gemini-3-pro-image-preview/)
   assert.doesNotMatch(settingsPage, /gemini-3\.1-flash-image-preview/)
   assert.doesNotMatch(settingsPage, /doubao-seedream/)
-  assert.doesNotMatch(settingsPage, /speech-2\.8-hd/)
+  // 注：speech-2.8-hd 曾是「被移除的 TTS 模型」，现按新需求作为音频(TTS)服务重新接入，
+  // 因此不再列入「不得出现」清单——它的存在性由下方 providerPresets 测试正向断言。
 })
 
 test('only text service configs expose the connection test button', () => {
@@ -87,5 +88,10 @@ test('settings page offers the supported official provider presets', () => {
   assert.match(providerPresetBlock('video'), /minimax/)
   assert.match(providerPresetBlock('video'), /aliyun/)
   assert.doesNotMatch(providerPresetBlock('video'), /'vidu'/i)
-  assert.doesNotMatch(settingsPage, /audio:\s*\{/)
+  // 音频（TTS）服务按新需求接入：只暴露豆包语音与 MiniMax 语音两个预置
+  assert.match(providerPresetBlock('audio'), /volcengine/)
+  assert.match(providerPresetBlock('audio'), /minimax/)
+  assert.match(providerPresetBlock('audio'), /speech-2\.8-hd/)
+  assert.match(providerPresetBlock('audio'), /openspeech\.bytedance\.com/)
+  assert.doesNotMatch(providerPresetBlock('audio'), /'openai'|'gemini'|'aliyun'/)
 })

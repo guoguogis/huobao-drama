@@ -63,7 +63,8 @@ test('backend rejects unsupported providers at DB and route boundaries', () => {
   assert.doesNotMatch(ai, /'deepseek'/)
   assert.doesNotMatch(ai, /'ali'/)
   assert.doesNotMatch(ai, /'vidu'/)
-  assert.doesNotMatch(ai, /audio:\s*\[/)
+  // 音频（TTS）服务已重新接入：必须有自己的 provider 白名单，且只允许豆包 / MiniMax
+  assert.match(ai, /audio:\s*\[\s*'volcengine',\s*'minimax'\s*\]/)
   assert.match(ai, /isOfficialProvider/)
   assert.match(ai, /isOfficialProvider\(serviceType,\s*r\.provider\)/)
   assert.match(ai, /isOfficialProvider\(row\.serviceType as ServiceType,\s*row\.provider\)/)

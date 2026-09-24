@@ -24,6 +24,7 @@ import settings from './routes/settings.js'
 import storage from './routes/storage.js'
 import serverUpdate from './routes/serverUpdate.js'
 import auth from './routes/auth.js'
+import audio from './routes/audio.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
 import { seedAuthAccount, getAuthUsername } from './services/auth.js'
@@ -78,6 +79,7 @@ api.route('/storage', storage)
 api.route('/settings', settings)
 api.route('/server-update', serverUpdate)
 api.route('/auth', auth)
+api.route('/audio', audio)
 
 app.route('/api/v1', api)
 

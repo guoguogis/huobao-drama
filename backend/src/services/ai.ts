@@ -11,7 +11,7 @@ import {
   volcengineApiPrefix,
 } from './adapters/volcengine-endpoints.js'
 
-export type ServiceType = 'text' | 'image' | 'video'
+export type ServiceType = 'text' | 'image' | 'video' | 'audio'
 
 export interface AIConfig {
   provider: string
@@ -20,23 +20,36 @@ export interface AIConfig {
   model: string
   /** 采样温度，null 表示不设置（跟随服务商默认）。存于 ai_service_configs.settings JSON */
   temperature?: number | null
+  /** settings JSON 原文：音频服务用它的 appid / cluster / 默认音色编号等 */
+  settings?: string | null
+}
+
+/**
+ * 从 settings JSON 读取任意字段（音频服务的 appid / cluster / 默认音色编号等都在这里）。
+ * 非法 JSON 一律视为空对象。
+ */
+export function parseConfigSettings(settingsRaw: string | null | undefined): Record<string, any> {
+  if (!settingsRaw) return {}
+  try {
+    const parsed = JSON.parse(settingsRaw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
 }
 
 /** 从 settings JSON 解析 temperature；非法值一律视为未设置 */
 export function parseConfigTemperature(settingsRaw: string | null | undefined): number | null {
-  if (!settingsRaw) return null
-  try {
-    const t = JSON.parse(settingsRaw)?.temperature
-    return typeof t === 'number' && Number.isFinite(t) ? t : null
-  } catch {
-    return null
-  }
+  const t = parseConfigSettings(settingsRaw).temperature
+  return typeof t === 'number' && Number.isFinite(t) ? t : null
 }
 
 export const officialProviders: Record<ServiceType, readonly string[]> = {
   text: ['openai', 'gemini', 'volcengine', VOLCENGINE_PLAN_PROVIDER],
   image: ['openai', 'gemini', 'volcengine', VOLCENGINE_PLAN_PROVIDER],
   video: ['volcengine', VOLCENGINE_PLAN_PROVIDER, 'minimax', 'aliyun'],
+  // 音频（TTS）：豆包语音走 openspeech 经典 HTTP；MiniMax 走 t2a_v2
+  audio: ['volcengine', 'minimax'],
 }
 
 export function isOfficialProvider(serviceType?: string | null, provider?: string | null): boolean {
@@ -98,6 +111,7 @@ export async function getActiveConfig(serviceType: ServiceType): Promise<AIConfi
     apiKey: active.apiKey,
     model: models[0] || '',
     temperature: parseConfigTemperature(active.settings),
+    settings: active.settings,
   }
 }
 
@@ -151,5 +165,6 @@ export async function getConfigById(id: number): Promise<AIConfig | null> {
     apiKey: row.apiKey,
     model: models[0] || '',
     temperature: parseConfigTemperature(row.settings),
+    settings: row.settings,
   }
 }

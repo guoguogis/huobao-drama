@@ -37,7 +37,8 @@
     "serviceType": {
       "text": "テキスト",
       "image": "画像",
-      "video": "動画"
+      "video": "動画",
+      "audio": "オーディオ"
     }
   },
   "layout": {
@@ -306,7 +307,8 @@
       "meta": {
         "text": "脚本リライト、キャラクター・シーン抽出、分镜分解などの Agent テキスト能力",
         "image": "キャラクター図、シーン図、ショット図などの静止画生成",
-        "video": "ショット動画の直接生成（デフォルト Seedance 2.0）"
+        "video": "ショット動画の直接生成（デフォルト Seedance 2.0）",
+        "audio": "音声合成（TTS）：音色 ID から音声サンプルを生成し、キャラクターの声に使用"
       }
     },
     "styles": {
@@ -417,11 +419,19 @@
       "tempHint": "空欄でプロバイダーのデフォルトに従う",
       "tempPlaceholder": "例：0.6",
       "tempNote": "温度が固定されたモデル（例：kimi-k2 系は 0.6 のみ）があります。invalid temperature エラーが出た場合はここに値を入力してください。",
+      "audioVoice": "既定の音色 ID",
+      "audioVoiceHint": "豆包音声は BV で始まる voice_type、MiniMax は voice_id を使用。キャラクター単位で上書き可。",
+      "audioKeyHint": "豆包音声/Seed Speech は X-Api-Key、MiniMax は Authorization: Bearer で送信します。Key に互換性はありません。",
       "test": "設定をテスト",
       "reachable": "エンドポイントが応答しました",
       "unreachable": "エンドポイントのテストに失敗しました",
       "providerRequired": "プロバイダーを選択してください",
-      "tempInvalid": "Temperature は 0〜2 の数値で入力してください"
+      "tempInvalid": "Temperature は 0〜2 の数値で入力してください",
+      "audioEmotion": "感情（MiniMax・任意）",
+      "audioEmotionHint": "指定可：happy / sad / angry / fearful / disgusted / surprised / neutral。空欄なら音色の既定値。",
+      "audioTone": "読み替え指定（MiniMax・任意・1 行 1 件）",
+      "audioToneHint": "例：处理/(chu3)(li3)。人名などの特殊な読みに。空欄なら送信しません。",
+      "audioBaseUrlHint": "MiniMax は国内 https://api.minimax.cn / 国際 https://api.minimaxi.com（Key の所属サイトと一致必須）。豆包は常に https://openspeech.bytedance.com。"
     },
     "styleDialog": {
       "editTitle": "スタイルプリセットを編集",
@@ -643,8 +653,19 @@
       "limitSkipped": "1 回の生成で使える音声サンプルは最大 {clips} 本（合計 {seconds} 秒以内）です。「{name}」はスキップしました。他のキャラクターの音声を解除すると入れ替えられます",
       "uploaded": "「{name}」の音声サンプルを設定しました",
       "cleared": "音声サンプルをクリアしました",
+      "ttsTitle": "音声サービスで生成",
+      "ttsNoService": "音声サービスが未設定です。「設定 → AI サービス」で追加してください（例：豆包音声）。",
+      "ttsService": "音声サービス",
+      "ttsVoiceId": "音色 ID",
+      "ttsText": "合成テキスト",
+      "ttsGenerate": "生成して適用",
+      "ttsGenerating": "生成中…",
+      "ttsLimits": "生成結果は {min}〜{max} 秒以内が必要です（テキストが短すぎ／長すぎると失敗）",
+      "ttsDefaultText": "こんにちは、{name}です。",
       "mapping": "音声参照：{list}。各キャラクターのセリフには対応する音声を使用してください。",
-      "mappingItem": "{index}本目の音声＝{name}"
+      "mappingItem": "{index}本目の音声＝{name}",
+      "ttsEmotion": "感情（任意・MiniMax）",
+      "ttsEmotionHint": "happy / sad / angry / fearful / disgusted / surprised / neutral。空欄ならサービス既定値"
     },
     "create": {
       "title": "{type}を追加",

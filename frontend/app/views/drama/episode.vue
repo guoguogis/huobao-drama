@@ -1272,6 +1272,54 @@
                   :src="voiceSrc(assetDetail.item)"
                 />
                 <p class="asset-voice-note">{{ t('episode.voice.note') }}</p>
+
+                <!-- 方式二：用已配置的音频服务 + 音色编号直接生成样本 -->
+                <div class="asset-voice-tts">
+                  <button type="button" class="asset-voice-tts-toggle" @click="ttsOpen = !ttsOpen">
+                    <ChevronDown :size="12" :class="['asset-voice-caret', { open: ttsOpen }]" />
+                    {{ t('episode.voice.ttsTitle') }}
+                  </button>
+                  <div v-if="ttsOpen" class="asset-voice-tts-body">
+                    <p v-if="!audioConfigs.length" class="asset-voice-note">{{ t('episode.voice.ttsNoService') }}</p>
+                    <template v-else>
+                      <label class="asset-voice-field">
+                        <span>{{ t('episode.voice.ttsService') }}</span>
+                        <select v-model="ttsConfigId" class="input">
+                          <option v-for="c in audioConfigs" :key="c.id" :value="c.id">
+                            {{ c.name || `${c.provider}-audio` }}
+                          </option>
+                        </select>
+                      </label>
+                      <label class="asset-voice-field">
+                        <span>{{ t('episode.voice.ttsVoiceId') }}</span>
+                        <input
+                          v-model="ttsVoiceId" class="input mono"
+                          :placeholder="ttsVoicePlaceholder"
+                        />
+                      </label>
+                      <label class="asset-voice-field">
+                        <span>{{ t('episode.voice.ttsText') }}</span>
+                        <textarea v-model="ttsText" class="input" rows="2" />
+                      </label>
+                      <label class="asset-voice-field">
+                        <span>{{ t('episode.voice.ttsEmotion') }}</span>
+                        <input v-model="ttsEmotion" class="input" placeholder="happy" />
+                        <span class="asset-voice-note">{{ t('episode.voice.ttsEmotionHint') }}</span>
+                      </label>
+                      <div class="asset-voice-row">
+                        <button
+                          type="button" class="btn btn-sm btn-primary"
+                          :disabled="ttsGenerating || !canSynthesize"
+                          @click="generateVoiceByTts(assetDetail.item)"
+                        >
+                          <Loader2 v-if="ttsGenerating" :size="11" class="animate-spin" />
+                          {{ ttsGenerating ? t('episode.voice.ttsGenerating') : t('episode.voice.ttsGenerate') }}
+                        </button>
+                        <span class="asset-voice-note">{{ t('episode.voice.ttsLimits', { min: 2, max: 10 }) }}</span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
@@ -1467,9 +1515,9 @@ import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import {
   Users, FileText, FolderKanban, Clapperboard, Download, Loader2,
-  Plus, X, ListTodo, CircleHelp,
+  Plus, X, ListTodo, CircleHelp, ChevronDown,
 } from 'lucide-vue-next'
-import { api, dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, propAPI, taskAPI, mergeAPI, aiConfigAPI, uploadAPI } from '~/composables/useApi'
+import { api, dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, propAPI, taskAPI, mergeAPI, aiConfigAPI, audioAPI, uploadAPI } from '~/composables/useApi'
 import { startTour, autoTour } from '~/composables/useTour'
 import { useAgent } from '~/composables/useAgent'
 import { toastError, mapError, MODERATION_RE } from '~/composables/useToast'
@@ -3332,6 +3380,61 @@ function voiceLabel(item) {
 }
 const uploadingVoiceIds = ref([])
 function isUploadingVoice(id) { return uploadingVoiceIds.value.includes(id) }
+
+// ===== 方式二：用已配置的音频服务（TTS）+ 音色编号直接生成样本 =====
+const ttsOpen = ref(false)
+const ttsGenerating = ref(false)
+const audioConfigs = ref([])
+const ttsConfigId = ref(null)
+const ttsVoiceId = ref('')
+const ttsText = ref('')
+/** 情绪（MiniMax 支持：happy/sad/angry/fearful/disgusted/surprised/neutral），留空则用服务配置里的默认值 */
+const ttsEmotion = ref('')
+
+const selectedAudioConfig = computed(() => audioConfigs.value.find(c => c.id === ttsConfigId.value) || null)
+/** 豆包是 voice_type（BV 开头），MiniMax 是 voice_id */
+const ttsVoicePlaceholder = computed(() =>
+  selectedAudioConfig.value?.provider === 'minimax' ? 'male-qn-qingse' : 'BV700_streaming',
+)
+const canSynthesize = computed(() => !!ttsConfigId.value && !!ttsVoiceId.value.trim() && !!ttsText.value.trim())
+
+/** 打开面板时按角色预填一段默认文本（2–10 秒的目标长度） */
+function ensureTtsText(item) {
+  if (!ttsText.value.trim()) {
+    ttsText.value = t('episode.voice.ttsDefaultText', { name: item?.name || '' })
+  }
+}
+watch(ttsOpen, (open) => { if (open) ensureTtsText(assetDetail.value?.item) })
+
+/**
+ * 生成音色样本：调用音频服务 → 落盘（后端校验 2–10 秒 / ≤10MB）→ 写入该角色。
+ * 与手工上传共用同一套字段与限制，因此两种方式产出的样本等价。
+ */
+async function generateVoiceByTts(item) {
+  if (!item?.id || ttsGenerating.value || !canSynthesize.value) return
+  ttsGenerating.value = true
+  try {
+    const res = await audioAPI.synthesize({
+      text: ttsText.value.trim(),
+      voice_id: ttsVoiceId.value.trim(),
+      emotion: ttsEmotion.value.trim() || undefined,
+      config_id: ttsConfigId.value,
+      format: 'mp3',
+    })
+    await characterAPI.update(item.id, {
+      voice_audio_url: res.path,
+      voice_audio_duration: res.duration ?? null,
+    })
+    item.voice_audio_url = res.path
+    item.voice_audio_duration = res.duration ?? null
+    await refresh()
+    toast.success(t('episode.voice.uploaded', { name: item.name || '' }))
+  } catch (e) {
+    toastError(e)
+  } finally {
+    ttsGenerating.value = false
+  }
+}
 function uploadCharacterVoice(item) {
   if (!item?.id) return
   // 上游只接受 mp3 / wav，选择器同步收窄，避免传上去才在生成时被上游拒绝
@@ -3524,14 +3627,21 @@ async function doMerge(ids) {
 }
 async function loadConfigs() {
   try {
-    const [imgCfgs, vidCfgs, txtCfgs] = await Promise.all([
+    const [imgCfgs, vidCfgs, txtCfgs, audCfgs] = await Promise.all([
       aiConfigAPI.list('image'),
       aiConfigAPI.list('video'),
       aiConfigAPI.list('text'),
+      aiConfigAPI.list('audio'),
     ])
     imageConfigs.value = imgCfgs || []
     videoConfigs.value = vidCfgs || []
     textConfigs.value = txtCfgs || []
+    audioConfigs.value = audCfgs || []
+    if (!ttsConfigId.value && audioConfigs.value.length) {
+      const preferred = audioConfigs.value.find(c => c.is_active) || audioConfigs.value[0]
+      ttsConfigId.value = preferred.id
+      ttsVoiceId.value = preferred.settings?.speaker || preferred.settings?.voice_id || preferred.settings?.voice_type || ''
+    }
   } catch (e) { console.error('Failed to load AI configs', e) }
 }
 
@@ -5495,6 +5605,21 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
 }
 .asset-voice-player { width: 100%; height: 32px; margin-top: 8px; }
 .asset-voice-note { margin: 7px 0 0; font-size: 11px; line-height: 1.65; color: var(--text-3); }
+
+/* 方式二：TTS 生成音色样本 */
+.asset-voice-tts { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.asset-voice-tts-toggle {
+  display: flex; align-items: center; gap: 5px;
+  background: transparent; border: none; cursor: pointer; padding: 0;
+  font-size: 11.5px; font-weight: 600; color: var(--accent-text);
+}
+.asset-voice-caret { transition: transform 0.18s var(--ease-out); }
+.asset-voice-caret.open { transform: rotate(180deg); }
+.asset-voice-tts-body { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.asset-voice-field { display: flex; flex-direction: column; gap: 4px; }
+.asset-voice-field > span { font-size: 11px; font-weight: 600; color: var(--text-2); }
+.asset-voice-field .input { font-size: 12px; }
+.asset-voice-field textarea.input { resize: vertical; min-height: 44px; line-height: 1.5; }
 .asset-detail-state {
   min-height: 20px;
   display: inline-flex;

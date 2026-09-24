@@ -470,8 +470,23 @@
             <input v-model.number="cfgForm.priority" class="input" type="number" min="0" max="999" />
             <span class="field-hint">{{ t('settings.cfg.priorityHint') }}</span>
           </label>
-          <label class="field"><span class="field-label">API Key</span><input v-model="cfgForm.api_key" class="input" type="password" placeholder="sk-..." /></label>
-          <label class="field"><span class="field-label">Base URL</span><input v-model="cfgForm.base_url" class="input" placeholder="https://..." /></label>
+          <label class="field">
+            <span class="field-label">
+              API Key
+              <!-- 音频服务把「这个 Key 会落到哪个请求头」直接标在字段上，避免提示与输入框分家 -->
+              <span v-if="cfgForm.service_type === 'audio'" class="dim">({{ audioKeyHeader }})</span>
+            </span>
+            <input
+              v-model="cfgForm.api_key" class="input" type="password"
+              :placeholder="cfgForm.service_type === 'audio' ? audioKeyHeader : 'sk-...'"
+            />
+            <span v-if="cfgForm.service_type === 'audio'" class="field-hint">{{ t('settings.cfg.audioKeyHint') }}</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Base URL</span>
+            <input v-model="cfgForm.base_url" class="input" placeholder="https://..." />
+            <span v-if="cfgForm.service_type === 'audio'" class="field-hint">{{ t('settings.cfg.audioBaseUrlHint') }}</span>
+          </label>
           <div class="field">
             <span class="field-label">{{ t('settings.cfg.models') }}</span>
             <div v-if="cfgForm.models.length" class="model-chips">
@@ -500,6 +515,29 @@
             <input v-model="cfgForm.temperature" class="input" type="number" step="0.1" min="0" max="2" :placeholder="t('settings.cfg.tempPlaceholder')" />
             <span class="field-hint">{{ t('settings.cfg.tempNote') }}</span>
           </label>
+          <!-- 音频服务附加参数：音色编号（豆包 speaker / MiniMax voice_id），MiniMax 另有情绪与多音字 -->
+          <template v-if="cfgForm.service_type === 'audio'">
+            <label class="field">
+              <span class="field-label">{{ t('settings.cfg.audioVoice') }}</span>
+              <input
+                v-model="cfgForm.audioVoice" class="input mono"
+                :placeholder="cfgForm.provider === 'minimax' ? 'male-qn-qingse' : 'S_xxxxxxxx'"
+              />
+              <span class="field-hint">{{ t('settings.cfg.audioVoiceHint') }}</span>
+            </label>
+            <template v-if="cfgForm.provider === 'minimax'">
+              <label class="field">
+                <span class="field-label">{{ t('settings.cfg.audioEmotion') }}</span>
+                <input v-model="cfgForm.audioEmotion" class="input" placeholder="happy" />
+                <span class="field-hint">{{ t('settings.cfg.audioEmotionHint') }}</span>
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('settings.cfg.audioTone') }}</span>
+                <textarea v-model="cfgForm.audioTone" class="input" rows="3" placeholder="处理/(chu3)(li3)" />
+                <span class="field-hint">{{ t('settings.cfg.audioToneHint') }}</span>
+              </label>
+            </template>
+          </template>
           <div v-if="cfgTestResult" class="test-result" :class="{ ok: cfgTestResult.reachable, bad: !cfgTestResult.reachable }">
             <div class="test-result-head">
               <span class="tag" :class="cfgTestResult.reachable ? 'tag-success' : 'tag-error'">{{ cfgTestResult.status || 'ERROR' }}</span>
@@ -669,7 +707,42 @@ const cfgDialog = ref(false)
 const cfgEditId = ref(null)
 const cfgTesting = ref(false)
 const cfgTestResult = ref(null)
-const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', models: [], service_type: 'text', priority: 0, temperature: '' })
+const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', models: [], service_type: 'text', priority: 0, temperature: '', audioVoice: '', audioEmotion: '', audioTone: '' })
+
+/**
+ * 音频服务：这个 Key 实际会落到哪个请求头。
+ * 内聚显示在 API Key 字段上（作为标签后缀与占位符），避免「提示挂在半屏之外」。
+ */
+const audioKeyHeader = computed(() => (cfgForm.provider === 'minimax' ? 'Bearer' : 'X-Api-Key'))
+
+/**
+ * 音频服务的附加参数 → settings JSON。
+ * 音色编号在两家叫法不同：豆包语音/Seed Speech 是声音复刻得到的 `speaker`，
+ * MiniMax 是 `voice_id`；统一由用户贴入，这里按服务商落到正确字段。
+ * 鉴权都用 api_key 一栏（豆包 = X-Api-Key，MiniMax = Bearer）。
+ * MiniMax 额外支持 emotion（情绪）与 pronunciation_tone（多音字覆盖）。
+ */
+function audioSettingsPayload() {
+  if (cfgForm.service_type !== 'audio') return undefined
+  const voice = String(cfgForm.audioVoice || '').trim()
+  if (cfgForm.provider === 'minimax') {
+    const tone = String(cfgForm.audioTone || '')
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean)
+    return {
+      voice_id: voice,
+      emotion: String(cfgForm.audioEmotion || '').trim(),
+      pronunciation_tone: tone,
+      // 清掉早期版本遗留、以及另一家服务商的键（后端按空值删除）
+      appid: '',
+      cluster: '',
+      voice_type: '',
+      speaker: '',
+    }
+  }
+  return { speaker: voice, appid: '', cluster: '', voice_type: '', voice_id: '' }
+}
 // 模型标签编辑器：首位即默认模型；输入框支持回车添加、逗号/换行批量粘贴
 const modelInput = ref('')
 function addModel() {
@@ -696,6 +769,7 @@ const serviceTypes = computed(() => [
   { type: 'text', label: t('common.serviceType.text') },
   { type: 'image', label: t('common.serviceType.image') },
   { type: 'video', label: t('common.serviceType.video') },
+  { type: 'audio', label: t('common.serviceType.audio') },
 ])
 const providers = ['gemini', 'openai', 'volcengine', 'volcengine-plan', 'minimax', 'aliyun']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
@@ -703,6 +777,7 @@ const serviceMeta = computed(() => ({
   text: { label: t('common.serviceType.text'), desc: t('settings.ai.meta.text') },
   image: { label: t('common.serviceType.image'), desc: t('settings.ai.meta.image') },
   video: { label: t('common.serviceType.video'), desc: t('settings.ai.meta.video') },
+  audio: { label: t('common.serviceType.audio'), desc: t('settings.ai.meta.audio') },
 }))
 const providerPresets = {
   text: {
@@ -726,6 +801,13 @@ const providerPresets = {
     'volcengine-plan': { label: '火山方舟 AgentPlan 视频', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedance-2-0-mini-260615', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-260128'] },
     minimax: { label: 'MiniMax H3 官方', baseUrl: 'https://api.minimaxi.com', models: ['MiniMax-H3'] },
   },
+  // 音频（TTS）：豆包语音 / Seed Speech 用 X-Api-Key（就是 api_key 一栏），
+  // 音色编号是声音复刻得到的 speaker_id；MiniMax 用 voice_id（Bearer）
+  audio: {
+    volcengine: { label: '豆包语音 / Seed Speech', baseUrl: 'https://openspeech.bytedance.com', models: ['seed-audio-1.0'] },
+    // 注意：MiniMax 国内站是 api.minimax.cn，国际站是 api.minimaxi.com —— 必须与 key 所属站点一致
+    minimax: { label: 'MiniMax 语音', baseUrl: 'https://api.minimax.cn', models: ['speech-2.8-hd'] },
+  },
 }
 
 function byType(t) { return cfgs.value.filter(c => c.service_type === t) }
@@ -743,6 +825,12 @@ function applyProviderPreset(type, provider) {
   cfgForm.models = [...preset.models]
   // 配置名持久化进 DB：用 provider 英文 + 服务类型英文标识拼，不随界面语言漂移
   cfgForm.name = `${preset.label}-${type}`
+  // 音频服务预置音色编号：切换服务商时必须**重置**，否则上一家的编号会留在表单里
+  // （MiniMax 的 voice_id 拿到豆包那边就是 "speaker not found"，实测过）。
+  // 豆包可以留空：留空即不传 references，上游用默认音色（实测可正常出音）。
+  if (type === 'audio') {
+    cfgForm.audioVoice = provider === 'minimax' ? 'male-qn-qingse' : ''
+  }
 }
 
 async function loadCfgs() { try { cfgs.value = await aiConfigAPI.list() } catch (e) { toastError(e) } }
@@ -784,7 +872,7 @@ async function delCfg(id) { await aiConfigAPI.del(id); toast.success(t('index.de
 function startAddCfg(t) {
   cfgEditId.value = null
   cfgTestResult.value = null
-  Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', models: [], service_type: t, priority: 0, temperature: '' })
+  Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', models: [], service_type: t, priority: 0, temperature: '', audioVoice: '', audioEmotion: '', audioTone: '' })
   const firstPreset = presetsByType(t)[0]
   if (firstPreset) applyProviderPreset(t, firstPreset.provider)
   cfgDialog.value = true
@@ -801,6 +889,9 @@ function startEditCfg(c) {
     service_type: c.service_type,
     priority: c.priority ?? 0,
     temperature: c.temperature ?? '',
+    audioVoice: c.settings?.speaker || c.settings?.voice_type || c.settings?.voice_id || '',
+    audioEmotion: c.settings?.emotion || '',
+    audioTone: Array.isArray(c.settings?.pronunciation_tone) ? c.settings.pronunciation_tone.join('\n') : '',
   })
   cfgDialog.value = true
 }
@@ -811,7 +902,18 @@ async function testCfgPayload(payload) {
     if (cfgTestResult.value.reachable) toast.success(t('settings.cfg.reachable'))
     else toast.warning(t('settings.cfg.unreachable'))
   } catch (e) {
-    toastError(e)
+    // 测试按钮是排障入口：这里必须显示真实原因。
+    // 若走 toastError/mapError，任何后端提示都会被统一映射成「操作失败，请重试」，等于把线索吞掉。
+    cfgTestResult.value = {
+      ok: false,
+      reachable: false,
+      status: 'ERROR',
+      method: 'POST',
+      url: payload.base_url || '',
+      message: String(e?.message || e || t('errors.unknown')),
+      response_preview: '',
+    }
+    toast.warning(t('settings.cfg.unreachable'))
   } finally {
     cfgTesting.value = false
   }
@@ -823,6 +925,7 @@ async function testDraftCfg() {
     api_key: cfgForm.api_key,
     base_url: cfgForm.base_url,
     model: [...cfgForm.models],
+    settings: audioSettingsPayload(),
   })
 }
 async function testExistingCfg(c) {
@@ -833,6 +936,7 @@ async function testExistingCfg(c) {
     api_key: c.api_key || '',
     base_url: c.base_url || '',
     model: Array.isArray(c.model) ? c.model : [],
+    settings: c.settings,
   })
 }
 async function saveCfg() {
@@ -842,9 +946,10 @@ async function saveCfg() {
   if (temperature !== null && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
     toast.warning(t('settings.cfg.tempInvalid')); return
   }
+  const settings = audioSettingsPayload()
   try {
-    if (cfgEditId.value) await aiConfigAPI.update(cfgEditId.value, { name: cfgForm.name, provider: cfgForm.provider, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature })
-    else await aiConfigAPI.create({ service_type: cfgForm.service_type, provider: cfgForm.provider, name: cfgForm.name || `${cfgForm.provider}-${cfgForm.service_type}`, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature })
+    if (cfgEditId.value) await aiConfigAPI.update(cfgEditId.value, { name: cfgForm.name, provider: cfgForm.provider, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature, settings })
+    else await aiConfigAPI.create({ service_type: cfgForm.service_type, provider: cfgForm.provider, name: cfgForm.name || `${cfgForm.provider}-${cfgForm.service_type}`, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority, temperature, settings })
     cfgDialog.value = false; toast.success(t('common.saved')); loadCfgs()
   } catch (e) { toastError(e) }
 }

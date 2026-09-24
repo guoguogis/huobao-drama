@@ -37,7 +37,8 @@
     "serviceType": {
       "text": "Text",
       "image": "Image",
-      "video": "Video"
+      "video": "Video",
+      "audio": "Audio"
     }
   },
   "layout": {
@@ -306,7 +307,8 @@
       "meta": {
         "text": "Text capabilities: script rewriting, asset extraction, storyboard breaking",
         "image": "Static image generation: characters, scenes and shots",
-        "video": "Direct video generation, Seedance 2.0 by default"
+        "video": "Direct video generation, Seedance 2.0 by default",
+        "audio": "Text-to-speech: generate a voice sample from a voice ID for character voices"
       }
     },
     "styles": {
@@ -417,11 +419,19 @@
       "tempHint": "blank = provider default",
       "tempPlaceholder": "e.g. 0.6",
       "tempNote": "Some models enforce a fixed temperature (e.g. kimi-k2 only allows 0.6). If you get an invalid temperature error, set the value here.",
+      "audioVoice": "Default voice ID",
+      "audioVoiceHint": "Doubao voice uses a BV-prefixed voice_type; MiniMax uses voice_id. Overridable per character.",
+      "audioKeyHint": "Doubao/Seed Speech sends it as X-Api-Key; MiniMax sends Authorization: Bearer. Keys are not interchangeable.",
       "test": "Test Config",
       "reachable": "Endpoint responded",
       "unreachable": "Endpoint failed the test",
       "providerRequired": "Select a provider",
-      "tempInvalid": "Temperature must be a number between 0 and 2"
+      "tempInvalid": "Temperature must be a number between 0 and 2",
+      "audioEmotion": "Emotion (MiniMax, optional)",
+      "audioEmotionHint": "Allowed: happy / sad / angry / fearful / disgusted / surprised / neutral. Empty = voice default.",
+      "audioTone": "Pronunciation overrides (MiniMax, optional, one per line)",
+      "audioToneHint": "Format: 处理/(chu3)(li3). Useful for name pronunciation; empty = not sent.",
+      "audioBaseUrlHint": "MiniMax: https://api.minimax.cn (China) or https://api.minimaxi.com (international) — must match your key's site. Doubao is always https://openspeech.bytedance.com."
     },
     "styleDialog": {
       "editTitle": "Edit Style Preset",
@@ -643,8 +653,19 @@
       "limitSkipped": "At most {clips} voice samples per generation ({seconds}s total) — “{name}” was skipped; clear another character’s voice to make room",
       "uploaded": "Voice sample set for “{name}”",
       "cleared": "Voice sample cleared",
+      "ttsTitle": "Generate via voice service",
+      "ttsNoService": "No audio service configured yet. Add one (e.g. Doubao voice) under Settings → AI services.",
+      "ttsService": "Audio service",
+      "ttsVoiceId": "Voice ID",
+      "ttsText": "Text to synthesize",
+      "ttsGenerate": "Generate & apply",
+      "ttsGenerating": "Generating…",
+      "ttsLimits": "Result must be {min}–{max}s; text that is too short or too long will fail",
+      "ttsDefaultText": "Hello, I am {name}.",
       "mapping": "Voice reference: {list}. Each character must speak with their own corresponding voice.",
-      "mappingItem": "clip {index} = {name}"
+      "mappingItem": "clip {index} = {name}",
+      "ttsEmotion": "Emotion (optional, MiniMax)",
+      "ttsEmotionHint": "happy / sad / angry / fearful / disgusted / surprised / neutral; empty uses the service default"
     },
     "create": {
       "title": "Add {type}",

@@ -37,6 +37,9 @@ export function audioMaxClipsFor(model: string | null | undefined): number {
 
 export const AUDIO_FORMATS_TEXT = Array.from(AUDIO_EXT).map((e) => e.slice(1)).join(' / ')
 
+/** TTS 产物允许的格式（与参考音频白名单一致） */
+export const TTS_ONLY_FORMATS = ['mp3', 'wav'] as const
+
 export const AUDIO_LIMITS_TEXT =
   `仅支持 ${AUDIO_FORMATS_TEXT}，单段 ${AUDIO_MIN_SECONDS}–${AUDIO_MAX_SECONDS} 秒，` +
   `总时长不超过 ${AUDIO_TOTAL_MAX_SECONDS} 秒（最多 ${AUDIO_MAX_CLIPS} 段，Wan 3.0 为 ${AUDIO_MAX_CLIPS_WAN} 段），` +

@@ -17,21 +17,29 @@ test('backend removes the voice assignment agent and tools', () => {
   assert.equal(exists('workspace/skills/voice_assigner/SKILL.md'), false)
 })
 
-test('backend removes audio service providers, TTS adapters, and voice routes', () => {
+test('旧语音分配链路保持移除；音频服务(TTS)按新需求重新接入', () => {
   const index = read('src/index.ts')
   const ai = read('src/services/ai.ts')
   const registry = read('src/services/adapters/registry.ts')
   const types = read('src/services/adapters/types.ts')
 
+  // 旧设计（ai_voices 表 + 独立音频配置读取 + 独立 TTS 生成服务）不得回归
   assert.doesNotMatch(index, /aiVoices/)
-  assert.doesNotMatch(ai, /audio/)
   assert.doesNotMatch(ai, /getAudioConfig/)
-  assert.doesNotMatch(registry, /TTS/)
   assert.doesNotMatch(registry, /minimax-tts/)
   assert.doesNotMatch(types, /TTSProviderAdapter/)
   assert.equal(exists('src/routes/aiVoices.ts'), false)
   assert.equal(exists('src/services/tts-generation.ts'), false)
   assert.equal(exists('src/services/adapters/minimax-tts.ts'), false)
+
+  // 新设计的音频服务：service_type=audio + 独立 TTS 适配器 + 合成路由，且复用现有配置读取
+  assert.match(ai, /'text' \| 'image' \| 'video' \| 'audio'/)
+  assert.match(registry, /getVideoAdapter/)
+  assert.equal(exists('src/services/adapters/tts.ts'), true)
+  assert.equal(exists('src/routes/audio.ts'), true)
+  assert.match(index, /api\.route\('\/audio', audio\)/)
+  assert.match(read('src/routes/audio.ts'), /getActiveConfig\(serviceType\)/)
+
   assert.match(read('src/services/adapters/volcengine-video.ts'), /generate_audio:\s*record\.generateAudio/)
   assert.doesNotMatch(read('src/services/adapters/volcengine-video.ts'), /generate_audio:\s*false/)
 })

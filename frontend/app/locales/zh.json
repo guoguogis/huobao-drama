@@ -37,7 +37,8 @@
     "serviceType": {
       "text": "文本",
       "image": "图片",
-      "video": "视频"
+      "video": "视频",
+      "audio": "音频"
     }
   },
   "layout": {
@@ -306,7 +307,8 @@
       "meta": {
         "text": "剧本改写、角色场景提取、分镜拆解等 Agent 文本能力",
         "image": "角色图、场景图与镜头图等静态图像生成",
-        "video": "镜头视频直出生成，默认 Seedance 2.0"
+        "video": "镜头视频直出生成，默认 Seedance 2.0",
+        "audio": "语音合成（TTS）：按音色编号生成配音样本，供角色音色使用"
       }
     },
     "styles": {
@@ -417,11 +419,19 @@
       "tempHint": "留空跟随服务商默认",
       "tempPlaceholder": "如 0.6",
       "tempNote": "部分模型强制固定温度（如 kimi-k2 系只允许 0.6），报 invalid temperature 错误时在此填入对应值。",
+      "audioVoice": "默认音色编号",
+      "audioVoiceHint": "豆包语音用 BV 开头的 voice_type；MiniMax 用 voice_id。可在角色资产里临时覆盖。",
+      "audioKeyHint": "豆包语音/Seed Speech 用请求头 X-Api-Key；MiniMax 用 Authorization: Bearer。两家的 Key 不通用。",
       "test": "测试配置",
       "reachable": "端点已响应",
       "unreachable": "端点未通过测试",
       "providerRequired": "选择服务商",
-      "tempInvalid": "Temperature 需为 0~2 的数字"
+      "tempInvalid": "Temperature 需为 0~2 的数字",
+      "audioEmotion": "情绪（MiniMax，可选）",
+      "audioEmotionHint": "可选值：happy / sad / angry / fearful / disgusted / surprised / neutral。留空则用音色默认情绪。",
+      "audioTone": "多音字覆盖（MiniMax，可选，每行一条）",
+      "audioToneHint": "形如 处理/(chu3)(li3)，用于纠正人名等特殊读法；留空则不下发。",
+      "audioBaseUrlHint": "MiniMax 国内站填 https://api.minimax.cn，国际站填 https://api.minimaxi.com —— 必须与 Key 所属站点一致；豆包固定 https://openspeech.bytedance.com。"
     },
     "styleDialog": {
       "editTitle": "编辑风格预设",
@@ -643,8 +653,19 @@
       "limitSkipped": "一次最多带 {clips} 段音色样本（总时长 ≤{seconds} 秒），已跳过「{name}」；可先取消其中某个角色的音色",
       "uploaded": "已设置「{name}」的音色样本",
       "cleared": "音色样本已清除",
+      "ttsTitle": "用语音服务生成",
+      "ttsNoService": "还没有配置音频服务。请先到「设置 → AI 服务」添加音频服务（如豆包语音）。",
+      "ttsService": "音频服务",
+      "ttsVoiceId": "音色编号",
+      "ttsText": "合成文本",
+      "ttsGenerate": "生成并应用",
+      "ttsGenerating": "生成中…",
+      "ttsLimits": "生成结果需在 {min}–{max} 秒内，文本太短或太长都会失败",
+      "ttsDefaultText": "你好，我是{name}。",
       "mapping": "音色参考：{list}。各角色的对白请使用对应音色。",
-      "mappingItem": "第{index}段音频={name}"
+      "mappingItem": "第{index}段音频={name}",
+      "ttsEmotion": "情绪（可选，MiniMax）",
+      "ttsEmotionHint": "happy / sad / angry / fearful / disgusted / surprised / neutral；留空用服务配置的默认情绪"
     },
     "create": {
       "title": "新增{type}",
