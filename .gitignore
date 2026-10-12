@@ -47,6 +47,11 @@ temp/
 /CLAUDE.md
 /AGENTS.md
 
+# Temp / scratch（调试脚本、截图、编译缓存等中间产物，一律不入库）
+.tmp*
+.npm-cache/
+.pip/
+
 # Agent workspace (skills/prompts 为策划模板保持跟踪，其余产出忽略)
 backend/workspace/*
 !backend/workspace/skills/

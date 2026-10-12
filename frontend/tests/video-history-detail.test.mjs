@@ -251,13 +251,12 @@ test('主视频窗口跟随历史条的选中：选中「生成中」记录时�
   // 选中记录（可能是还没有成品的生成中记录）
   assert.match(episode, /const selectedHistoryTask = computed\(\(\) => sbVideoHistory\.value\.find\(t => isHistorySelected\(t\)\) \|\| null\)/)
   assert.match(episode, /const selectedHistoryGenerating = computed\(/)
-  // videoTaskState 只要有视频就返回 done，重绘期间会一直显示「已完成」，故播放器/检查器另取选中态
-  assert.match(episode, /const selectedVideoState = computed\(\(\) => \(selectedHistoryGenerating\.value \? 'pending' : videoTaskState\(selectedSb\.value\)\)\)/)
-  // 播放区：生成态优先于「继续放旧主视频」
+  // 播放画面跟随选中；头部状态则与左侧列表同口径（见 video-state-consistency 测试），
+  // 否则选中旧成品时会出现「左侧列表：生成中 / 右侧头部：已完成」的矛盾
+  assert.match(episode, /const selectedVideoState = computed\(\(\) => videoTaskState\(selectedSb\.value\)\)/)
   assert.match(episode, /<div v-if="selectedHistoryGenerating" class="video-player-empty">/)
   assert.match(episode, /<video\r?\n\s+v-else-if="previewVideoUrl \|\| hasVid\(selectedSb\)"/)
-  // 头部状态与检查器按钮都按选中状态走（重绘期间显示生成中并禁用，避免重复提交）
-  assert.match(episode, /:class="\['video-task-status', 'is-' \+ selectedVideoState\]"/)
+  // 检查器按钮按同一状态（重绘期间显示生成中并禁用，避免重复提交）
   assert.match(episode, /:disabled="selectedVideoState === 'pending'"/)
   assert.match(episode, /videoActionLabel\(selectedVideoState\)/)
   // 详情也跟随选中：生成中的记录同样能看参数与提示词

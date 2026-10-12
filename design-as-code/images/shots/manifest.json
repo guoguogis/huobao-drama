@@ -1,0 +1,20 @@
+[
+  {
+    "shot": "S05",
+    "status": "completed",
+    "taskId": 131,
+    "file": "D:\\code\\GitHub\\huobao-drama\\design-as-code\\images\\shots\\S05.jpeg"
+  },
+  {
+    "shot": "S13",
+    "status": "completed",
+    "taskId": 132,
+    "file": "D:\\code\\GitHub\\huobao-drama\\design-as-code\\images\\shots\\S13.jpeg"
+  },
+  {
+    "shot": "S19",
+    "status": "completed",
+    "taskId": 133,
+    "file": "D:\\code\\GitHub\\huobao-drama\\design-as-code\\images\\shots\\S19.jpeg"
+  }
+]

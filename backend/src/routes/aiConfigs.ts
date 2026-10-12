@@ -247,6 +247,181 @@ app.post('/', async (c) => {
   return created(c, withParsedFields(row))
 })
 
+/**
+ * 配置导入 / 导出。
+ *
+ * 导出文件是**含明文 API Key 的完整快照**，用途只有一个：在受信任的设备之间复用配置。
+ * 匹配键为「service_type + provider + name」——导出不含 id（设备间无意义），
+ * 因此导入是 upsert：命中同键则更新，否则新增。
+ */
+const CONFIG_EXPORT_FORMAT = 'juwei-ai-configs'
+const CONFIG_EXPORT_VERSION = 1
+
+/** 单条配置归一化（导出与导入共用同一口径，避免两处字段漂移） */
+function normalizeConfigEntry(raw: any): { entry?: Record<string, any>; error?: string } {
+  const serviceType = String(raw?.service_type ?? raw?.serviceType ?? '').trim()
+  const provider = String(raw?.provider ?? '').trim()
+  if (!serviceType || !provider) return { error: '缺少 service_type 或 provider' }
+  if (!isOfficialProvider(serviceType, provider)) {
+    return { error: `不支持的 service_type/provider：${serviceType}/${provider}` }
+  }
+
+  const rawSettings = raw?.settings
+  const settingsObj = rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings) ? rawSettings : {}
+  let temperature: number | null | undefined
+  if ('temperature' in settingsObj) {
+    try {
+      temperature = normalizeTemperature(settingsObj.temperature)
+    } catch {
+      return { error: 'temperature 须为 0 到 2 之间的数字' }
+    }
+  }
+
+  const models = Array.isArray(raw?.model)
+    ? raw.model.map((m: any) => String(m)).filter(Boolean)
+    : (raw?.model ? [String(raw.model)] : [])
+
+  const fallbackName = `${provider}-${serviceType}`
+  return {
+    entry: {
+      serviceType,
+      provider,
+      name: String(raw?.name ?? '').trim() || fallbackName,
+      baseUrl: String(raw?.base_url ?? raw?.baseUrl ?? '').trim(),
+      apiKey: String(raw?.api_key ?? raw?.apiKey ?? ''),
+      model: models,
+      priority: Number.isFinite(Number(raw?.priority)) ? Number(raw.priority) : 0,
+      isActive: !(raw?.is_active === false || raw?.isActive === false),
+      settings: mergeSettings(settingsObj, temperature),
+    },
+  }
+}
+
+const configKey = (serviceType: string, provider: string, name: string) =>
+  `${serviceType}\u0000${provider}\u0000${name}`
+
+// GET /ai-configs/export — 导出全部配置（含密钥）
+// 必须注册在 GET /:id 之前，否则会被 :id 路由吞掉
+app.get('/export', async (c) => {
+  const rows = await db.select().from(schema.aiServiceConfigs)
+  const configs = rows
+    .slice()
+    .sort((a, b) => String(a.serviceType).localeCompare(String(b.serviceType))
+      || (b.priority || 0) - (a.priority || 0)
+      || Number(a.id) - Number(b.id))
+    .map(r => ({
+      service_type: r.serviceType,
+      provider: r.provider || '',
+      name: r.name,
+      base_url: r.baseUrl || '',
+      api_key: r.apiKey || '',
+      model: (() => { try { return r.model ? JSON.parse(r.model) : [] } catch { return [] } })(),
+      priority: r.priority || 0,
+      is_active: !!r.isActive,
+      settings: parseConfigSettings(r.settings),
+    }))
+
+  logTaskSuccess('AIConfig', 'export', { count: configs.length })
+  // 响应含明文密钥：禁止浏览器与任何中间层缓存
+  c.header('Cache-Control', 'no-store')
+  return success(c, {
+    format: CONFIG_EXPORT_FORMAT,
+    version: CONFIG_EXPORT_VERSION,
+    exported_at: new Date().toISOString(),
+    count: configs.length,
+    configs,
+  })
+})
+
+// POST /ai-configs/import — 导入导出的快照
+// body: { data?: <导出结构>, prune?: boolean }（也接受直接传导出结构本身）
+app.post('/import', async (c) => {
+  let body: any
+  try {
+    body = await c.req.json()
+  } catch {
+    return badRequest(c, '请求体不是合法 JSON')
+  }
+
+  const payload = body?.data && typeof body.data === 'object' && !Array.isArray(body.data) ? body.data : body
+  if (!payload || !Array.isArray(payload.configs)) {
+    return badRequest(c, '配置文件缺少 configs 数组')
+  }
+  if (payload.format && payload.format !== CONFIG_EXPORT_FORMAT) {
+    return badRequest(c, `不是本应用导出的配置文件（format=${payload.format}）`)
+  }
+  const version = Number(payload.version ?? 0)
+  if (Number.isFinite(version) && version > CONFIG_EXPORT_VERSION) {
+    return badRequest(c, `配置文件版本（v${version}）高于当前应用支持的 v${CONFIG_EXPORT_VERSION}，请先升级应用`)
+  }
+
+  const prune = body?.prune === true
+  const ts = now()
+  const existing = await db.select().from(schema.aiServiceConfigs)
+  const byKey = new Map(existing.map(r => [configKey(r.serviceType, r.provider || '', r.name), r]))
+
+  const result = { total: payload.configs.length, added: 0, updated: 0, pruned: 0, skipped: 0, errors: [] as string[] }
+  const seen = new Set<string>()
+
+  for (let i = 0; i < payload.configs.length; i++) {
+    const parsed = normalizeConfigEntry(payload.configs[i])
+    if (!parsed.entry) {
+      result.skipped++
+      // 只回报前若干条，避免把整个文件回显进响应
+      if (result.errors.length < 8) result.errors.push(`第 ${i + 1} 条：${parsed.error}`)
+      continue
+    }
+    const e = parsed.entry
+    const key = configKey(e.serviceType, e.provider, e.name)
+    seen.add(key)
+
+    const hit = byKey.get(key)
+    if (hit) {
+      await db.update(schema.aiServiceConfigs).set({
+        baseUrl: e.baseUrl,
+        apiKey: e.apiKey,
+        model: JSON.stringify(e.model),
+        priority: e.priority,
+        isActive: e.isActive,
+        settings: e.settings,
+        updatedAt: ts,
+      }).where(eq(schema.aiServiceConfigs.id, hit.id))
+      result.updated++
+    } else {
+      const res = await db.insert(schema.aiServiceConfigs).values({
+        serviceType: e.serviceType,
+        provider: e.provider,
+        name: e.name,
+        baseUrl: e.baseUrl,
+        apiKey: e.apiKey,
+        model: JSON.stringify(e.model),
+        priority: e.priority,
+        isActive: e.isActive,
+        settings: e.settings,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      // 同一份文件里出现同键条目时，后一条应当更新前一条，而不是再插一行
+      byKey.set(key, { ...e, id: getInsertId(res) } as any)
+      result.added++
+    }
+  }
+
+  if (prune) {
+    for (const [key, row] of byKey) {
+      if (seen.has(key)) continue
+      await db.delete(schema.aiServiceConfigs).where(eq(schema.aiServiceConfigs.id, row.id))
+      result.pruned++
+    }
+  }
+
+  logTaskSuccess('AIConfig', 'import', {
+    total: result.total, added: result.added, updated: result.updated,
+    pruned: result.pruned, skipped: result.skipped,
+  })
+  return success(c, result)
+})
+
 // POST /ai-configs/test
 app.post('/test', async (c) => {
   const body = await c.req.json()

@@ -1,0 +1,137 @@
+{
+  "voice": "female-chengshu",
+  "backend": "mmx",
+  "total": 101.124,
+  "scene_count": 14,
+  "narrated_count": 14,
+  "measured_count": 14,
+  "estimated_scenes": [],
+  "scenes": [
+    {
+      "id": "scene-01",
+      "file": "scene-01.mp3",
+      "duration": 6.12,
+      "duration_hint": 7,
+      "start": 0.0,
+      "text": "写一部短剧，最贵的不是灵感，是中途放弃的那百分之九十。",
+      "subtitle": "最贵的不是灵感，是中途放弃的那百分之九十"
+    },
+    {
+      "id": "scene-02",
+      "file": "scene-02.mp3",
+      "duration": 12.132,
+      "duration_hint": 15,
+      "start": 6.12,
+      "text": "你写了三章小说，脑子里全是画面。可真要动手，先得把它改成剧本——对白、场景、行动线，一样都不能少。",
+      "subtitle": "先得把它改成剧本"
+    },
+    {
+      "id": "scene-03",
+      "file": "scene-03.mp3",
+      "duration": 10.26,
+      "duration_hint": 13,
+      "start": 18.252,
+      "text": "好，剧本有了。人物长什么样？阿禾是二十五岁的茶馆老板娘——这句话，十个人能画出十个版本。",
+      "subtitle": "十个人能画出十个版本"
+    },
+    {
+      "id": "scene-04",
+      "file": "scene-04.mp3",
+      "duration": 12.852,
+      "duration_hint": 17,
+      "start": 28.512,
+      "text": "更麻烦的是分镜。一句「她推门进来，看见桌上那封信」，到底是全景、中景、还是特写？想不清楚，就永远开不了机。",
+      "subtitle": "想不清楚，就永远开不了机"
+    },
+    {
+      "id": "scene-05",
+      "file": "scene-05.mp3",
+      "duration": 6.12,
+      "duration_hint": 7,
+      "start": 41.364,
+      "text": "问题不在你不努力。是从文字到画面这一步，一直没有工具。",
+      "subtitle": "是从文字到画面这一步，一直没有工具"
+    },
+    {
+      "id": "scene-06",
+      "file": "scene-06.mp3",
+      "duration": 7.848,
+      "duration_hint": 13,
+      "start": 47.484,
+      "text": "所以真正该做的，是把「小说 → 剧本 → 资产 → 分镜 → 成片」串成一条能自动往下流的流水线。",
+      "subtitle": "串成一条能自动往下流的流水线"
+    },
+    {
+      "id": "scene-07",
+      "file": "scene-07.mp3",
+      "duration": 11.52,
+      "duration_hint": 15,
+      "start": 55.332,
+      "text": "第一步，把小说丢进去，自动拆成剧本：谁在说话、在哪儿说话、做了什么事。人物卡、场景卡也跟着自动提取出来。",
+      "subtitle": "人物卡、场景卡也跟着自动提取出来"
+    },
+    {
+      "id": "scene-08",
+      "file": "scene-08.mp3",
+      "duration": 8.856,
+      "duration_hint": 11,
+      "start": 66.852,
+      "text": "第二步，人物形象定一次，后面每一镜都锁死同一张脸。这就是那百分之九十的人卡住的地方。",
+      "subtitle": "人物形象定一次，后面每一镜都锁死同一张脸"
+    },
+    {
+      "id": "scene-09",
+      "file": "scene-09.mp3",
+      "duration": 5.544,
+      "duration_hint": 6,
+      "start": 75.708,
+      "text": "第三步，分镜自动拆解，景别和运镜都替你定好。",
+      "subtitle": "分镜自动拆解，景别和运镜都替你定好"
+    },
+    {
+      "id": "scene-10",
+      "file": "scene-10.mp3",
+      "duration": 5.4,
+      "duration_hint": 6,
+      "start": 81.252,
+      "text": "然后是生图和生视频。你只需要在关键几帧上做判断。",
+      "subtitle": "你只需要在关键几帧上做判断"
+    },
+    {
+      "id": "scene-11",
+      "file": "scene-11.mp3",
+      "duration": 5.04,
+      "duration_hint": 6,
+      "start": 86.652,
+      "text": "最后自动拼接，字幕跟上，一条片子就出来了。",
+      "subtitle": "自动拼接，字幕跟上，一条片子就出来了"
+    },
+    {
+      "id": "scene-12",
+      "file": "scene-12.mp3",
+      "duration": 3.132,
+      "duration_hint": 4,
+      "start": 91.692,
+      "text": "原来三周的活，现在一个下午。",
+      "subtitle": "原来三周的活，现在一个下午"
+    },
+    {
+      "id": "scene-13",
+      "file": "scene-13.mp3",
+      "duration": 3.384,
+      "duration_hint": 4,
+      "start": 94.824,
+      "text": "你要做的，只是把那个想法写下来。",
+      "subtitle": "只是把那个想法写下来"
+    },
+    {
+      "id": "scene-14",
+      "file": "scene-14.mp3",
+      "duration": 2.916,
+      "duration_hint": 4,
+      "start": 98.208,
+      "text": "从一篇小说，到一条成片。",
+      "subtitle": "从一篇小说，到一条成片"
+    }
+  ]
+}

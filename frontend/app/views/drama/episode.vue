@@ -1869,7 +1869,9 @@ function ensureExportPicks() {
   exportPickBySb.value = next
 }
 
-function isExportSelected(sb) { return !!exportPickBySb.value[sb.id] }/** 该版本是否就是本镜头选定的那一个（选中态只落在这一个视频上） */
+function isExportSelected(sb) { return !!exportPickBySb.value[sb.id] }
+
+/** 该版本是否就是本镜头选定的那一个（选中态只落在这一个视频上） */
 function isClipPicked(sb, clip) {
   const path = taskClipPath(clip)
   return !!path && exportPickBySb.value[sb.id] === path
@@ -2493,9 +2495,16 @@ function videoModerationHint(msg) {
   return MODERATION_RE.test(String(msg || '')) ? t('episode.vid.moderationHint') : ''
 }
 
+/**
+ * 分镜的视频状态。
+ *
+ * 「正在生成」优先于「已有视频」：给已有视频的分镜点重绘时，分镜自身仍留着上一条成品，
+ * 若先判 hasVid 就会一直显示「已完成」，与右侧面板和历史条上那条「生成中」自相矛盾。
+ * 失败态仍放在 hasVid 之后：已有成品的分镜失败的只是新一轮尝试，不覆盖可用成品。
+ */
 function videoTaskState(sb) {
-  if (hasVid(sb)) return 'done'
   if (isPendingVideo(sb?.id)) return 'pending'
+  if (hasVid(sb)) return 'done'
   if (videoFailMessage(sb?.id)) return 'failed'
   return 'ready'
 }
@@ -2790,10 +2799,16 @@ async function loadGenTasks() {
     const pending = new Set()
     const failed = {}
     for (const [sbId, task] of latestBySb) {
+      const sb = sbs.value.find(s => s.id === sbId)
+      // 「正在生成」必须恢复，哪怕分镜已有旧成品：否则刷新页面后，给已有视频的分镜重绘
+      // 会在左侧列表显示「已完成」，与右侧面板/历史条上那条「生成中」不一致
+      if (task.status === 'processing') {
+        if (sb) pending.add(sbId)
+        continue
+      }
       // 分镜已有视频(失败后重试成功)时不再报历史错误
-      if (hasVid(sbs.value.find(s => s.id === sbId))) continue
-      if (task.status === 'processing') pending.add(sbId)
-      else if (task.status === 'failed') failed[sbId] = task.error_msg || t('episode.status.failed')
+      if (hasVid(sb)) continue
+      if (task.status === 'failed') failed[sbId] = task.error_msg || t('episode.status.failed')
     }
     // 刚点击提交、任务记录尚未加载出来的本地状态保留,避免状态闪退
     for (const id of pendingVideoIds.value) if (!latestBySb.has(id)) pending.add(id)
@@ -3436,6 +3451,20 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
   })()
 }
 
+/**
+ * 生成完成后等分镜回写 video_url。
+ * 后端的任务状态与分镜 video_url 是两次写：轮询读到 completed 时，分镜可能还没带上新视频，
+ * 只刷一次会让任务列表停在「待生成」。这里最多补刷数次（约 3 秒）。
+ */
+async function refreshUntilStoryboardVideo(storyboardId, attempts = 5, delay = 600) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delay)
+    await refresh()
+    if (hasVid(sbs.value.find(s => s.id === storyboardId))) return true
+  }
+  return false
+}
+
 async function genCharImg(id) {
   try {
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
@@ -3589,10 +3618,13 @@ const selectedHistoryTask = computed(() => sbVideoHistory.value.find(t => isHist
 /** 选中的正是生成中那条：主视频窗口跟随选择，显示生成态而不是旧主视频 */
 const selectedHistoryGenerating = computed(() => !!selectedHistoryTask.value && isHistoryGenerating(selectedHistoryTask.value))
 /**
- * 播放器/检查器使用的状态：选中的是生成中的记录时按「生成中」处理。
- * videoTaskState 只要分镜有视频就返回 done，重绘期间会一直显示「已完成」，与历史条的选中态不一致。
+ * 播放器/检查器使用的状态 = 分镜自身的生成状态（与左侧任务列表同一口径）。
+ *
+ * 与历史条选中态的区别：历史条选中的可能是**旧的**成品，若头部状态也跟着选中的旧版本走，
+ * 就会出现「左侧列表：生成中 / 右侧头部：已完成」的矛盾。所以头部只表达「这个分镜在不在生成」，
+ * 只有播放区（画面）跟随选中的那条记录。
  */
-const selectedVideoState = computed(() => (selectedHistoryGenerating.value ? 'pending' : videoTaskState(selectedSb.value)))
+const selectedVideoState = computed(() => videoTaskState(selectedSb.value))
 
 async function loadSbVideoHistory() {
   previewVideoUrl.value = ''
@@ -4202,6 +4234,10 @@ async function pollVideoGeneration(generationId, storyboardId) {
         pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
         delete failedVideoMessages.value[storyboardId]
         toast.success(t('episode.vid.genDone'))
+        // 后端先置任务 completed、再回写分镜 video_url：上面那次 refresh 可能还没读到新视频，
+        // 不补刷的话任务列表会停在「待生成」，要等用户手动刷新才对
+        await refreshUntilStoryboardVideo(storyboardId)
+        if (storyboardId === selectedSb.value?.id) await loadSbVideoHistory()
         return
       }
       if (res?.status === 'failed') {

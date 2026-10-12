@@ -96,6 +96,36 @@
               </button>
             </div>
           </section>
+
+          <!-- 配置快照导入 / 导出：换设备时不必重填一遍密钥 -->
+          <section class="card setup-panel cfg-io-panel">
+            <div class="setup-panel-head compact">
+              <div>
+                <div class="setup-title">{{ t('settings.ai.ioTitle') }}</div>
+                <div class="setup-desc">{{ t('settings.ai.ioDesc') }}</div>
+              </div>
+              <div class="cfg-io-actions">
+                <button class="btn btn-sm" :disabled="cfgExporting" @click="exportCfgs">
+                  <Loader2 v-if="cfgExporting" :size="12" class="animate-spin" />
+                  <Download v-else :size="13" />
+                  {{ t('settings.ai.exportBtn') }}
+                </button>
+                <button class="btn btn-sm" :disabled="cfgImporting" @click="cfgFileInput?.click()">
+                  <Loader2 v-if="cfgImporting" :size="12" class="animate-spin" />
+                  <Upload v-else :size="13" />
+                  {{ t('settings.ai.importBtn') }}
+                </button>
+              </div>
+            </div>
+            <p class="field-hint cfg-io-warn">{{ t('settings.ai.ioWarn') }}</p>
+            <input
+              ref="cfgFileInput"
+              type="file"
+              accept="application/json,.json"
+              class="sr-only"
+              @change="onCfgFilePicked"
+            />
+          </section>
           <div class="sections">
             <section v-for="st in serviceTypes" :key="st.type" class="card svc-group">
               <div class="svc-group-head">
@@ -655,6 +685,31 @@
         </div>
       </form>
     </div>
+    <!-- 导入预览（自建 dialog：需要展示「新增/更新/删除」明细 + 一个 prune 勾选） -->
+    <div v-if="cfgImport.open" class="overlay" @click.self="!cfgImporting && closeCfgImport()">
+      <div class="dialog">
+        <div class="dialog-head"><span class="dialog-title">{{ t('settings.ai.importTitle') }}</span></div>
+        <div class="dialog-body">
+          <div class="field">
+            <span class="field-label">{{ t('settings.ai.importFileName', { name: cfgImport.fileName }) }}</span>
+            <div class="field-hint">{{ t('settings.ai.importSummary', { total: cfgImport.total, add: cfgImport.add, update: cfgImport.update }) }}</div>
+            <div v-if="cfgImport.invalid" class="field-hint migrate-warn">{{ t('settings.ai.importInvalidLine', { n: cfgImport.invalid }) }}</div>
+          </div>
+          <label class="field cfg-io-prune" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+            <input v-model="cfgImport.prune" type="checkbox" :disabled="cfgImporting" />
+            <span class="field-label" style="margin:0">{{ t('settings.ai.importPrune') }}</span>
+          </label>
+          <p v-if="cfgImport.prune" class="field-hint migrate-warn">{{ t('settings.ai.importPruneHint', { n: cfgImport.pruneCount }) }}</p>
+        </div>
+        <div class="dialog-foot">
+          <button type="button" class="btn" :disabled="cfgImporting" @click="closeCfgImport()">{{ t('common.cancel') }}</button>
+          <button type="button" class="btn btn-primary" :disabled="cfgImporting" @click="confirmImportCfgs">
+            <Loader2 v-if="cfgImporting" :size="12" class="animate-spin" />
+            {{ t('settings.ai.importConfirm') }}
+          </button>
+        </div>
+      </div>
+    </div>
     <ConfirmDialog
       :open="!!styleToDelete"
       :title="t('settings.styleDelete.title')"
@@ -675,7 +730,7 @@
 </template>
 
 <script setup>
-import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, Sparkles, Palette, Star, HardDrive, Database, RefreshCw, Download, Languages, SunMoon, X } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, Sparkles, Palette, Star, HardDrive, Database, RefreshCw, Download, Upload, Languages, SunMoon, X } from 'lucide-vue-next'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { toastError } from '~/composables/useToast'
@@ -834,6 +889,128 @@ function applyProviderPreset(type, provider) {
 }
 
 async function loadCfgs() { try { cfgs.value = await aiConfigAPI.list() } catch (e) { toastError(e) } }
+
+// ===== 配置快照导入 / 导出 =====
+const cfgExporting = ref(false)
+const cfgImporting = ref(false)
+const cfgFileInput = ref(null)
+// 导入预览状态：parsed 为解析后的导出结构，add/update/pruneCount 为本地预估（最终以服务端校验为准）
+const cfgImport = reactive({ open: false, fileName: '', payload: null, total: 0, add: 0, update: 0, invalid: 0, prune: false, pruneCount: 0 })
+
+/** 导出文件名：带时间戳，便于在多台设备之间区分快照 */
+function cfgExportFilename() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `juwei-ai-configs-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`
+}
+
+async function exportCfgs() {
+  if (cfgExporting.value) return
+  cfgExporting.value = true
+  try {
+    const snapshot = await aiConfigAPI.exportAll()
+    const n = Array.isArray(snapshot?.configs) ? snapshot.configs.length : 0
+    if (!n) { toast.info(t('settings.ai.exportEmpty')); return }
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = cfgExportFilename()
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast.success(t('settings.ai.exportDone', { n }))
+  } catch (e) {
+    toastError(e, { fallback: 'settings.ai.exportFailed' })
+  } finally {
+    cfgExporting.value = false
+  }
+}
+
+/** 与后端 normalizeConfigEntry 同口径的本地预检（只做能提前判断的项，权威校验在服务端） */
+function localConfigKey(c) {
+  const serviceType = String(c?.service_type ?? c?.serviceType ?? '').trim()
+  const provider = String(c?.provider ?? '').trim()
+  if (!serviceType || !provider) return ''
+  const name = String(c?.name ?? '').trim() || `${provider}-${serviceType}`
+  return `${serviceType}\u0000${provider}\u0000${name}`
+}
+
+function closeCfgImport() {
+  cfgImport.open = false
+  cfgImport.payload = null
+  cfgImport.fileName = ''
+  if (cfgFileInput.value) cfgFileInput.value.value = ''
+}
+
+async function onCfgFilePicked(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+  try {
+    const text = await file.text()
+    let parsed
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      toast.error(t('settings.ai.importBadJson'))
+      closeCfgImport()
+      return
+    }
+    const payload = parsed?.configs ? parsed : parsed?.data
+    if (!payload || !Array.isArray(payload.configs)) {
+      toast.error(t('settings.ai.importBadFile'))
+      closeCfgImport()
+      return
+    }
+
+    // 本地预估：以「service_type+provider+name」为键，和库里现有配置比对
+    const existing = new Set(cfgs.value.map(c => `${c.service_type}\u0000${c.provider || ''}\u0000${c.name || `${c.provider}-${c.service_type}`}`))
+    const fileKeys = new Set()
+    let add = 0, update = 0, invalid = 0
+    for (const c of payload.configs) {
+      const key = localConfigKey(c)
+      if (!key) { invalid++; continue }
+      if (fileKeys.has(key)) continue
+      fileKeys.add(key)
+      if (existing.has(key)) update++
+      else add++
+    }
+    Object.assign(cfgImport, {
+      open: true,
+      fileName: file.name,
+      payload,
+      total: payload.configs.length,
+      add, update, invalid,
+      prune: false,
+      pruneCount: [...existing].filter(k => !fileKeys.has(k)).length,
+    })
+  } catch (e) {
+    toastError(e, { fallback: 'settings.ai.importFailed' })
+    closeCfgImport()
+  } finally {
+    if (event?.target) event.target.value = ''
+  }
+}
+
+async function confirmImportCfgs() {
+  if (cfgImporting.value || !cfgImport.payload) return
+  cfgImporting.value = true
+  try {
+    const res = await aiConfigAPI.importAll(cfgImport.payload, cfgImport.prune)
+    const parts = [t('settings.ai.importDone', { added: res?.added ?? 0, updated: res?.updated ?? 0 })]
+    if (res?.pruned) parts.push(t('settings.ai.importPruned', { n: res.pruned }))
+    if (res?.skipped) parts.push(t('settings.ai.importSkipped', { n: res.skipped }))
+    if (res?.errors?.length) parts.push(`（${res.errors[0]}）`)
+    toast.success(parts.join(''))
+    closeCfgImport()
+    await loadCfgs()
+  } catch (e) {
+    toastError(e, { fallback: 'settings.ai.importFailed' })
+  } finally {
+    cfgImporting.value = false
+  }
+}
 
 // ===== 默认模型选择 =====
 // 默认解析规则与工作台/后端一致：启用配置中优先级最高者的模型列表首位
@@ -1516,6 +1693,11 @@ onBeforeUnmount(stopUsagePoll)
 }
 .setup-panel-head.compact { margin-bottom: 12px; }
 .template-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 配置导入 / 导出 */
+.cfg-io-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cfg-io-warn { color: var(--warn-text); margin-top: 0; }
+/* 勾选行左对齐（dialog-body 会居中内容） */
+.cfg-io-prune { justify-content: flex-start; text-align: left; }
 .template-type-chip {
   min-height: var(--button-height-sm);
   padding: 0 14px;

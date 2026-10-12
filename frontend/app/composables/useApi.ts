@@ -153,6 +153,9 @@ export const aiConfigAPI = {
   update: (id: number, d: any) => api.put(`/ai-configs/${id}`, d),
   del: (id: number) => api.del(`/ai-configs/${id}`),
   test: (d: any) => api.post('/ai-configs/test', d),
+  // 配置快照导入/导出：导出结构含明文 API Key，仅用于可信设备间复用
+  exportAll: () => api.get('/ai-configs/export'),
+  importAll: (data: any, prune = false) => api.post('/ai-configs/import', { data, prune }),
 }
 
 /** 音频（TTS）：用已配置的音频服务 + 音色编号合成音色样本 */
