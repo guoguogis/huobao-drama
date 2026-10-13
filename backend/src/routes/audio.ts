@@ -64,12 +64,15 @@ app.post('/synthesize', async (c) => {
 
   // 配置解析：指定 config_id 优先，失效则回退到当前启用的音频配置
   const serviceType: ServiceType = 'audio'
-  const config = body.config_id
+  const resolved = body.config_id
     ? (await getConfigById(Number(body.config_id))) ?? await getActiveConfig(serviceType)
     : await getActiveConfig(serviceType)
-  if (!config) {
+  if (!resolved) {
     return badRequest(c, '未配置音频服务，请先到「设置 → AI 服务」添加并启用音频服务')
   }
+  // 显式指定模型（顶栏选音频模型）：配置解析出来的是首个模型，选了别的就覆盖
+  const explicitModel = String(body.model || '').trim()
+  const config = explicitModel ? { ...resolved, model: explicitModel } : resolved
 
   logTaskStart('AudioTTS', 'synthesize', {
     configId: body.config_id ?? null,

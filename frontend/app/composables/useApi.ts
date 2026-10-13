@@ -161,8 +161,54 @@ export const aiConfigAPI = {
 /** 音频（TTS）：用已配置的音频服务 + 音色编号合成音色样本 */
 export const audioAPI = {
   providers: () => api.get('/audio/providers'),
-  synthesize: (d: { text: string; voice_id?: string; emotion?: string; config_id?: number; format?: 'mp3' | 'wav'; speed?: number }) =>
+  synthesize: (d: { text: string; voice_id?: string; emotion?: string; config_id?: number; model?: string; format?: 'mp3' | 'wav'; speed?: number }) =>
     api.post('/audio/synthesize', d),
+}
+
+/**
+ * 口播视频：创作简报（主题/时长/倍速…）、口播稿多版本、逐镜计划、已落库镜头。
+ * speech_rate 是全链路唯一的语速来源（写稿字数预算、镜头时长、TTS 下发倍速都用它）。
+ */
+export const narrationAPI = {
+  brief: (dramaId: number) => api.get(`/narration/${dramaId}/brief`),
+  saveBrief: (dramaId: number, d: Record<string, any>) => api.put(`/narration/${dramaId}/brief`, d),
+  scripts: (dramaId: number) => api.get(`/narration/${dramaId}/scripts`),
+  selectScript: (dramaId: number, scriptId: number) => api.post(`/narration/${dramaId}/scripts/${scriptId}/select`, {}),
+  plan: (dramaId: number) => api.get(`/narration/${dramaId}/plan`),
+  shots: (dramaId: number) => api.get(`/narration/${dramaId}/shots`),
+  /** 把某条历史生成记录选为该段的成片片段（写回 storyboard.video_url） */
+  setShotClip: (dramaId: number, shotId: number, taskId: number) =>
+    api.post(`/narration/${dramaId}/shots/${shotId}/clip`, { task_id: taskId }),
+  /** 把某张候选图设为该镜的当前关键帧（下游默认取它当片段首帧） */
+  setShotKeyframe: (dramaId: number, shotId: number, taskId: number) =>
+    api.post(`/narration/${dramaId}/shots/${shotId}/keyframe`, { task_id: taskId }),
+  /** 选用该段片段的首帧/尾帧（传空串恢复默认：跟随当前关键帧） */
+  setShotClipFrames: (dramaId: number, shotId: number, d: { first_frame?: string; last_frame?: string }) =>
+    api.post(`/narration/${dramaId}/shots/${shotId}/clip-frames`, d),
+  /** 逐句配音：speed 取项目倍速（画面据此对齐） */
+  synthesize: (dramaId: number, d: { shot_ids?: number[]; speed?: number; voice_id?: string; config_id?: number; model?: string; format?: 'mp3' | 'wav' }) =>
+    api.post(`/narration/${dramaId}/synthesize`, d),
+  /** 剪辑合并：按句界重定时后拼接（成片记录与漫剧共用 video_merges 表） */
+  merge: (dramaId: number, d: { shot_ids?: number[]; include_audio?: boolean; resolution?: '720p' | '1080p' | '480p' }) =>
+    api.post(`/narration/${dramaId}/merge`, d),
+  /** 调口播稿 Agent 生成三个差异化版本（pick = 顶栏文本模型 + 其配置 id） */
+  writeScripts: (dramaId: number, episodeId: number, message: string, pick?: { model?: string; configId?: number }) =>
+    api.post('/agent/narration_writer/chat', {
+      drama_id: dramaId,
+      episode_id: episodeId,
+      message,
+      ...(pick?.model ? { model: pick.model } : {}),
+      ...(pick?.configId ? { config_id: pick.configId } : {}),
+    }),
+  /** 调分镜 Agent 把选定稿扩写成关键帧提示词与配音文本 */
+  planShots: (dramaId: number, episodeId: number, message: string, pick?: { model?: string; configId?: number }) =>
+    api.post('/agent/narration_planner/chat', {
+      drama_id: dramaId,
+      episode_id: episodeId,
+      message,
+      ...(pick?.model ? { model: pick.model } : {}),
+      ...(pick?.configId ? { config_id: pick.configId } : {}),
+    }),
 }
 
 // lang 缺省/为 zh 时读写基础版（不带 query，保持原请求形态）

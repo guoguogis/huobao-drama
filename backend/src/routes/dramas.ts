@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { and, eq, isNull, like, desc } from 'drizzle-orm'
 import { db, getInsertId, schema } from '../db/index.js'
 import { success, badRequest, notFound, created, now } from '../utils/response.js'
+import { defaultNarrationBrief } from '../services/narration.js'
 import { toSnakeCase, toSnakeCaseArray } from '../utils/transform.js'
 
 const app = new Hono()
@@ -52,14 +53,26 @@ app.get('/', async (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   const ts = now()
+  // 项目类型：漫剧（默认）/ 口播视频；决定进入哪个工作台与哪套流程
+  const projectType = body.project_type ?? body.projectType
+  if (projectType !== undefined && !['drama', 'narration'].includes(String(projectType))) {
+    return badRequest(c, '项目类型只支持 drama（漫剧）或 narration（口播视频）')
+  }
+  const isNarration = (projectType ? String(projectType) : 'drama') === 'narration'
+  // 口播项目建好就有简报：让记录自描述（项目卡片的「目标时长」、外部读取都不必等用户点保存）
+  const metadata = body.metadata
+    ?? (isNarration
+      ? JSON.stringify({ narration: { ...defaultNarrationBrief(), aspectRatio: body.aspect_ratio || '16:9' } })
+      : null)
   const res = await db.insert(schema.dramas).values({
     title: body.title,
     description: body.description,
     genre: body.genre,
     style: body.style,
+    projectType: projectType ? String(projectType) : 'drama',
     aspectRatio: body.aspect_ratio || '16:9',
     tags: body.tags ? JSON.stringify(body.tags) : null,
-    metadata: body.metadata,
+    metadata,
     status: 'draft',
     createdAt: ts,
     updatedAt: ts,
@@ -67,6 +80,22 @@ app.post('/', async (c) => {
 
   const [result] = await db.select().from(schema.dramas)
     .where(eq(schema.dramas.id, getInsertId(res)))
+
+  // 口播视频是单集形态：建项目时就把唯一一集建好，Agent/生成任务/拼接都挂在集上
+  // （漫剧仍走「添加集」流程，这里不预建，行为不变）
+  if ((result?.projectType || 'drama') === 'narration') {
+    await db.insert(schema.episodes).values({
+      dramaId: result!.id,
+      episodeNumber: 1,
+      title: result!.title || '口播视频',
+      description: result!.description || null,
+      duration: 0,
+      status: 'draft',
+      resolution: body.resolution || '720p',
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  }
 
   // 不再预建集 — 用户通过「添加集」流程创建（该流程会锁定图片/视频生成配置）
   return created(c, toSnakeCase(result))

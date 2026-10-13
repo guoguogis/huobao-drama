@@ -22,6 +22,12 @@ export default defineNuxtConfig({
           path: '/drama/:id/episode/:episodeNumber',
           file: fileURLToPath(new URL('./app/views/drama/episode.vue', import.meta.url)),
         },
+        {
+          // 口播视频工作台：与漫剧工作台并列的独立流程（项目类型决定进哪个）
+          name: 'narration-studio',
+          path: '/narration/:id',
+          file: fileURLToPath(new URL('./app/views/narration/index.vue', import.meta.url)),
+        },
       )
     },
   },

@@ -641,7 +641,13 @@ async function setEpisodeStatus(ep, status) {
 
 async function load() {
   try {
-    drama.value = await dramaAPI.get(dramaId)
+    const d = await dramaAPI.get(dramaId)
+    // 口播项目不该进漫剧工作台：直接送到它自己的工作台（老链接/手输 URL 也能纠正）
+    if (d?.project_type === 'narration') {
+      await navigateTo(`/narration/${dramaId}`, { replace: true })
+      return
+    }
+    drama.value = d
   } catch (e) {
     toastError(e)
   }

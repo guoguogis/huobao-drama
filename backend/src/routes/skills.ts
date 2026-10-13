@@ -18,6 +18,9 @@ const SKILL_ID_SEGMENT = /^[a-z0-9-]+$/
 // lang 非 zh 且变体存在时，名称/描述取自语言变体 frontmatter（缺失则回退基础版）
 app.get('/', async (c) => {
   const lang = normalizeLang(c.req.query('lang'))
+  // 先探一次目录是否变化：新增技能目录（如随版本升级投放）不必重启后端即可被发现。
+  // 内容编辑不改变目录 mtime，那种情况由 PUT /skills 显式 refresh 处理。
+  await skillsManagerWorkspace.skills?.maybeRefresh()
   const metas = await skillsManagerWorkspace.skills?.list() || []
   const out = []
   for (const meta of metas) {

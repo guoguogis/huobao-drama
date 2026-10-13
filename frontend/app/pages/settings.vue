@@ -695,9 +695,9 @@
             <div class="field-hint">{{ t('settings.ai.importSummary', { total: cfgImport.total, add: cfgImport.add, update: cfgImport.update }) }}</div>
             <div v-if="cfgImport.invalid" class="field-hint migrate-warn">{{ t('settings.ai.importInvalidLine', { n: cfgImport.invalid }) }}</div>
           </div>
-          <label class="field cfg-io-prune" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+          <label class="cfg-io-prune">
             <input v-model="cfgImport.prune" type="checkbox" :disabled="cfgImporting" />
-            <span class="field-label" style="margin:0">{{ t('settings.ai.importPrune') }}</span>
+            <span class="field-label">{{ t('settings.ai.importPrune') }}</span>
           </label>
           <p v-if="cfgImport.prune" class="field-hint migrate-warn">{{ t('settings.ai.importPruneHint', { n: cfgImport.pruneCount }) }}</p>
         </div>
@@ -1138,12 +1138,27 @@ const agentSaving = ref(false)
 const agentSaved = ref(null)
 const agentForm = reactive({ system_prompt: '' })
 
-const agentDefs = computed(() => [
-  { type: 'script_rewriter', label: t('settings.agents.scriptRewriter'), icon: '📝' },
-  { type: 'extractor', label: t('settings.agents.extractor'), icon: '🔍' },
-  { type: 'storyboard_breaker', label: t('settings.agents.storyboardBreaker'), icon: '🎬' },
-  { type: 'prompt_generator', label: t('settings.agents.promptGenerator'), icon: '🖼' },
-])
+/**
+ * Agent 列表 = 前端已知的展示元数据 × 后端实际注册的类型。
+ * 后端新增 Agent 后，即使前端还没补文案也能出现在这里（label 退回后端返回的 name），
+ * 避免「Agent 已注册但设置页看不见、无法编辑」。
+ */
+const agentDefs = computed(() => {
+  const known = [
+    { type: 'script_rewriter', label: t('settings.agents.scriptRewriter'), icon: '📝' },
+    { type: 'extractor', label: t('settings.agents.extractor'), icon: '🔍' },
+    { type: 'storyboard_breaker', label: t('settings.agents.storyboardBreaker'), icon: '🎬' },
+    { type: 'prompt_generator', label: t('settings.agents.promptGenerator'), icon: '🖼' },
+    // 口播视频场景（与漫剧链路并列）
+    { type: 'narration_writer', label: t('settings.agents.narrationWriter'), icon: '🎙' },
+    { type: 'narration_planner', label: t('settings.agents.narrationPlanner'), icon: '🎞' },
+  ]
+  const knownTypes = new Set(known.map(d => d.type))
+  const extra = agentCfgs.value
+    .filter(a => a?.agent_type && !knownTypes.has(a.agent_type))
+    .map(a => ({ type: a.agent_type, label: a.name || a.agent_type, icon: '✨' }))
+  return [...known, ...extra]
+})
 
 function getAgentCfg(type) {
   return agentCfgs.value.find(a => a.agent_type === type)
@@ -1696,8 +1711,16 @@ onBeforeUnmount(stopUsagePoll)
 /* 配置导入 / 导出 */
 .cfg-io-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .cfg-io-warn { color: var(--warn-text); margin-top: 0; }
-/* 勾选行左对齐（dialog-body 会居中内容） */
-.cfg-io-prune { justify-content: flex-start; text-align: left; }
+/* 勾选行：独立类，不套 .field（那是纵向弹性容器，会把勾选框与文字拆成两行并居中） */
+.cfg-io-prune {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
 .template-type-chip {
   min-height: var(--button-height-sm);
   padding: 0 14px;

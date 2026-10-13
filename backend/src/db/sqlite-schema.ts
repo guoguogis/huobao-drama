@@ -117,13 +117,28 @@ export const sqliteSchemaStatements = [
     deleted_at TEXT
   )`,
 
+  // 口播视频：一个主题一次生成 3 个不同版本的稿子，人工选定其中一版继续
+  `CREATE TABLE IF NOT EXISTS narration_scripts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drama_id INTEGER NOT NULL,
+    version_index INTEGER NOT NULL,
+    angle TEXT,
+    title TEXT,
+    content TEXT NOT NULL,
+    char_count INTEGER DEFAULT 0,
+    est_duration_sec REAL DEFAULT 0,
+    is_selected INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_narration_scripts_drama_id ON narration_scripts (drama_id)`,
+
   `CREATE TABLE IF NOT EXISTS episode_characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     episode_id INTEGER NOT NULL,
     character_id INTEGER NOT NULL,
     created_at TEXT NOT NULL
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_episode_characters_episode_id ON episode_characters (episode_id)`,
+  )`,  `CREATE INDEX IF NOT EXISTS idx_episode_characters_episode_id ON episode_characters (episode_id)`,
   `CREATE INDEX IF NOT EXISTS idx_episode_characters_character_id ON episode_characters (character_id)`,
 
   `CREATE TABLE IF NOT EXISTS episode_scenes (
@@ -410,6 +425,20 @@ export function initSqliteSchema(sqlite: Database.Database) {
   ensureColumns(sqlite, 'characters', {
     voice_audio_url: 'TEXT',
     voice_audio_duration: 'REAL',
+  })
+  // 项目类型：漫剧（默认，历史项目全部落在这里）/ 口播视频；不同类型走不同工作台
+  ensureColumns(sqlite, 'dramas', {
+    project_type: "TEXT DEFAULT 'drama'",
+  })
+  // 口播视频的分镜列：逐句旁白文本 + 句级音频（画面按句长对齐音轨）
+  ensureColumns(sqlite, 'storyboards', {
+    narration_text: 'TEXT',
+    narration_audio_url: 'TEXT',
+    narration_audio_duration: 'REAL',
+    narration_target_duration: 'REAL',
+    // 片段首尾帧的显式选用（关键帧可保留多张候选，这里记住用户挑了哪两张）
+    clip_first_frame: 'TEXT',
+    clip_last_frame: 'TEXT',
   })
   const insertSeed = sqlite.prepare(SEED_SQL)
   const upgradeSeed = sqlite.prepare(UPGRADE_SQL)

@@ -14,6 +14,7 @@ import { scriptTools } from './tools/script-tools.js'
 import { extractTools } from './tools/extract-tools.js'
 import { storyboardTools } from './tools/storyboard-tools.js'
 import { imagePromptTools } from './tools/image-prompt-tools.js'
+import { narrationPlannerTools, narrationWriterTools } from './tools/narration-tools.js'
 import { loadAgentSkills, skillWorkspaces } from './skills.js'
 import { loadAgentPromptFile, loadBasePromptFile } from './prompts.js'
 import { buildLanguageDirective } from './language.js'
@@ -149,10 +150,61 @@ video_prompt 规则（硬约束）：
 - 项目设定的视觉风格描述会由工具在保存图片提示词时自动注入到最终提示词的最前方，不要自行添加风格词
 - 必须实际调用保存工具，不要只在回复中给出提示词`,
   },
+  // ===== 口播视频场景（与漫剧链路并列，互不影响）=====
+  narration_writer: {
+    name: '口播稿写作',
+    instructions: `你是资深口播短视频编剧，专门为「口播视频」写可直接配音的稿子。
+
+你的任务是：围绕用户给的主题，写出**三个风格明显不同**的口播稿版本，供人工挑选。
+
+工作流程：
+1. 调用 read_narration_brief 读取主题、目标时长、语速倍率、字数预算
+2. 一次性构思三个不同切入角度（例如：悬念提问式 / 数据冲击式 / 故事场景式），三版在结构、开头钩子、论证方式上必须真正不同，不能只换措辞
+3. 调用 save_narration_scripts 保存三个版本
+
+硬约束：
+- 每个版本的字数必须落在 char_budget 的 ±8% 内（预算已按「基准 4.2 字/秒 × 语速倍率」算好，因为成片画面要按这个语速对齐音轨）
+- 一句话一个意思，**每句一行**：句子的边界就是后续镜头的边界，句子长短直接决定画面时长；单句以 12~28 字为宜，不要写长难句
+- 开篇第一句必须是 3 秒内能抓住人的钩子，不要「大家好」「今天我们聊聊」这类开场
+- 全篇口语化，可以直接念出来不别扭；数字用口语说法（如「三成」而不是「30%」）
+- 不要写镜头、画面、BGM、字幕等制作说明，只写要念出口的话
+- 不要在正文里加小标题、编号、markdown 记号
+
+输出要求：只产出三个版本并保存，不要在回复里复述全文。`,
+  },
+  narration_planner: {
+    name: '口播分镜与提示词',
+    instructions: `你是口播视频的画面导演兼提示词工程师，负责把**已选定的口播稿**拆成镜头，并为每个镜头产出关键帧图片提示词与音频（配音）提示词。
+
+工作流程：
+1. 调用 read_selected_narration 读取选定稿、语速倍率（默认 1.1 倍）、目标时长，以及**代码已经算好的 shot_plan**（每句一镜，含每镜时长）
+2. 严格按 shot_plan 的镜头数量与顺序创作，不要自行合并或增加镜头
+3. 为每个镜头写：
+   - keyframe_prompt：该镜头**起始画面的图片提示词**（供生图直接使用）
+   - narration_text：该镜头的旁白文本（取自 shot_plan 对应句子，**不要改写、不要增删字**，否则音画时长会错开）
+   - video_prompt：该镜头到下一镜头的运动/过渡提示词（首尾帧之间的动画）
+   - atmosphere：氛围与光线
+4. 调用 save_narration_shots 一次性保存全部镜头
+
+关键帧提示词规范（遵守 narration-planner 技能）：
+- 每个提示词是**单段连贯描述**，不要分点、不要出现「镜头1」「画面中」这类元话语
+- 必须包含：主体与动作、景别与构图、光线与色调、材质/风格关键词
+- 相邻镜头要有**视觉锚点**（同一主体/同一场景的延续），这样首尾帧动画才连贯
+- 画面里如果要出现文字，只允许少量准确的汉字，不要生成无意义文字
+
+音频（配音）提示词规范：
+- narration_text 就是 TTS 的输入文本；保持与 shot_plan 完全一致
+- 标点决定停顿：句末用「。」收尾，需要短停顿时用「，」，需要强调时不要用大写或星号
+- 不要插入「（停顿）」「（笑）」这类括号注释
+- 语速由项目设置统一控制（1.1 倍），你不要在文本里写语速说明
+
+硬约束：
+- 不要输出分析、规划或解释性文字，思考留在内部，输出只允许工具调用
+- 必须调用 save_narration_shots 真正保存；不要只在回复里给出内容`,
+  },
 }
 
 export const validAgentTypes = Object.keys(DEFAULT_PROMPTS)
-
 // Agent 每一步都会重新解析模型，相同端点只打一次日志避免刷屏
 let lastLoggedTextEndpointKey = ''
 
@@ -344,6 +396,9 @@ const AGENT_TOOLS: Record<string, Record<string, any>> = {
     readStoryboardContext: storyboardTools.readStoryboardContext,
     updateStoryboard: storyboardTools.updateStoryboard,
   },
+  // 口播视频：写稿 Agent 只读简报、只写稿；分镜 Agent 负责镜头与提示词
+  narration_writer: narrationWriterTools,
+  narration_planner: narrationPlannerTools,
 }
 
 /** instructions 按请求解析：prompt 文件（或默认）+ 技能全文拼接 + 目标语言指令块

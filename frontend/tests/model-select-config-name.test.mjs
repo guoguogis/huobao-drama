@@ -13,6 +13,8 @@ const appRoot = new URL('../app/', import.meta.url)
 const readApp = (path) => readFileSync(new URL(path, appRoot), 'utf8')
 const modelSelect = readApp('components/ModelSelect.vue')
 const episode = readApp('views/drama/episode.vue')
+// 模型选择的纯逻辑在共用模块里（漫剧与口播同一套 key 语义），相关断言指向它
+const modelPicks = readApp('utils/model-picks.ts')
 
 test('模型选择弹框在列表项里可见地展示配置名称（不只是 tooltip）', () => {
   // 列表项内联渲染配置名
@@ -36,22 +38,24 @@ test('配置名取值：有名字显示名字；未命名时仅在多配置场�
 
 test('同一模型来自不同配置时不再被去重吞掉（否则第二份配置选不到）', () => {
   // 选项键带上配置 id
-  assert.match(episode, /const key = `\$\{c\.provider\}\/\$\{m\}@\$\{c\.id\}`/)
+  assert.match(modelPicks, /const key = `\$\{c\.provider\}\/\$\{m\}@\$\{c\.id\}`/)
   // 旧键（provider/model）已不作为选项键
-  assert.doesNotMatch(episode, /const key = `\$\{c\.provider\}\/\$\{m\}`/)
+  assert.doesNotMatch(modelPicks, /const key = `\$\{c\.provider\}\/\$\{m\}`/)
   // 配置名带上（空名字保留空串，由 ModelSelect 决定是否退回厂商名）
-  assert.match(episode, /configName: c\.name \|\| ''/)
+  assert.match(modelPicks, /configName: c\.name \|\| ''/)
+  // 使用方（漫剧工作台）确实用的是共用实现
+  assert.match(episode, /from '~\/utils\/model-picks'/)
 })
 
 test('复合键解析：裸模型名去掉 @配置id，配置 id 兼容旧存储值', () => {
   // 后端只认裸模型名，前缀与后缀都要剥掉
-  assert.match(episode, /const at = key\.indexOf\('@'\)/)
-  assert.match(episode, /const bare = at >= 0 \? key\.slice\(0, at\) : key/)
-  assert.match(episode, /const i = bare\.indexOf\('\/'\)/)
+  assert.match(modelPicks, /const at = key\.indexOf\('@'\)/)
+  assert.match(modelPicks, /const bare = at >= 0 \? key\.slice\(0, at\) : key/)
+  assert.match(modelPicks, /const i = bare\.indexOf\('\/'\)/)
   // 旧值 'provider/model' 仍能解析出配置 id
-  assert.match(episode, /const legacy = options\.find\(o => `\$\{o\.provider\}\/\$\{o\.model\}` === key\)/)
-  assert.match(episode, /return legacy\?\.configId \|\| undefined/)
-  // 持久化的旧值在配置加载后升级为带配置 id 的键，而不是被判失效
+  assert.match(modelPicks, /const legacy = options\.find\(o => `\$\{o\.provider\}\/\$\{o\.model\}` === key\)/)
+  assert.match(modelPicks, /return legacy\?\.configId \|\| undefined/)
+  // 持久化的旧值在配置加载后升级为带配置 id 的键，而不是被判失效（仍在工作台侧做）
   assert.match(episode, /const legacy = opts\.find\(o => o\.model === modelRef\.value\)\r?\n\s+\|\| opts\.find\(o => `\$\{o\.provider\}\/\$\{o\.model\}` === modelRef\.value\)/)
   assert.match(episode, /modelRef\.value = legacy \? legacy\.key : ''/)
 })

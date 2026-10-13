@@ -11,6 +11,9 @@ const page = read('app/views/drama/episode.vue')
 const component = read('app/components/ModelSelect.vue')
 const useAgent = read('app/composables/useAgent.ts')
 const useApi = read('app/composables/useApi.ts')
+// 模型选择的纯逻辑已抽到共用模块（与口播工作台同一套 key 语义），实现断言指向那里；
+// episode.vue 侧只断言「怎么用」，避免同一份逻辑被复制成两份而漂移。
+const modelPicks = read('app/utils/model-picks.ts')
 
 test('workbench offers model selectors for rewrite, image and video generation', () => {
   // 三个选择器（自定义 ModelSelect 弹窗组件，非原生 select）
@@ -20,14 +23,17 @@ test('workbench offers model selectors for rewrite, image and video generation',
   assert.match(page, /v-model="videoModel"/)
   assert.doesNotMatch(page, /<select v-model="chatModel"/)
   // 选项汇总该类型全部启用配置的模型，API 返回的 model 可能已是数组
-  assert.match(page, /function collectModelOptions\(cfgs\)/)
-  assert.match(page, /if \(Array\.isArray\(raw\)\) return raw\.filter\(Boolean\)/)
+  assert.match(modelPicks, /export function collectModelOptions\(cfgs: any\[\]\): ModelPickOption\[\] \{/)
+  assert.match(modelPicks, /if \(Array\.isArray\(raw\)\) return raw\.filter\(Boolean\)/)
   assert.match(page, /collectModelOptions\(textConfigs\.value\)/)
   assert.match(page, /collectModelOptions\(imageConfigs\.value\)/)
   assert.match(page, /collectModelOptions\(videoConfigs\.value\)/)
   assert.match(page, /aiConfigAPI\.list\('text'\)/)
   // 选中值必须带配置 id：同名模型可能来自不同配置（官方直连 / 私有中转）
-  assert.match(page, /const key = `\$\{c\.provider\}\/\$\{m\}@\$\{c\.id\}`/)
+  assert.match(modelPicks, /const key = `\$\{c\.provider\}\/\$\{m\}@\$\{c\.id\}`/)
+  // 两个工作台必须都用这份共用实现（否则两边会各写一份并漂移）
+  assert.match(page, /from '~\/utils\/model-picks'/)
+  assert.doesNotMatch(page, /function collectModelOptions/)
 })
 
 test('model select dropdown is a custom designed popover that shows the config name', () => {
@@ -44,8 +50,8 @@ test('model select dropdown is a custom designed popover that shows the config n
 
 test('selected models are sent with rewrite, image and video generation requests', () => {
   // 选中模型时连同其所属配置一起调用；后端只认裸模型名，故下发前统一剥掉前缀与配置后缀
-  assert.match(page, /function ownerConfigId\(options, key\) \{/)
-  assert.match(page, /function bareModelName\(key\) \{/)
+  assert.match(modelPicks, /export function ownerConfigId\(options: ModelPickOption\[\], key\?: string \| null\): number \| undefined \{/)
+  assert.match(modelPicks, /export function bareModelName\(key\?: string \| null\): string \{/)
   // 改写（Agent）透传模型与配置
   assert.match(useAgent, /model: model \|\| undefined/)
   assert.match(useAgent, /config_id: configId \|\| undefined/)

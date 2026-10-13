@@ -119,8 +119,16 @@
         <div class="project-body">
           <h2 class="project-name truncate">{{ d.title }}</h2>
           <div class="project-meta">
-            <span v-if="d.style" class="tag tag-accent">{{ styleLabel(d.style) }}</span>
-            <span class="dim">{{ t('index.projectMeta', { chars: d.characters?.length || 0, scenes: d.scenes?.length || 0, eps: d.episodes?.length || 0 }) }}</span>
+            <!-- 项目类型标签：一眼区分漫剧 / 口播视频（不同类型走不同工作台） -->
+            <span
+              class="tag type-tag"
+              :class="d.project_type === 'narration' ? 'tag-accent' : 'tag-info'"
+              :title="d.project_type === 'narration' ? t('index.createDialog.typeNarrationDesc') : t('index.createDialog.typeDramaDesc')"
+            >
+              {{ typeLabel(d) }}
+            </span>
+            <span v-if="d.style" class="tag tag-plain">{{ styleLabel(d.style) }}</span>
+            <span class="dim">{{ metaLabel(d) }}</span>
           </div>
           <div class="project-foot dim">
             <Clock :size="11" :stroke-width="1.8" />
@@ -154,11 +162,29 @@
           </div>
           <div class="dialog-head-copy">
             <h2 class="dialog-title">{{ t('index.createDialog.title') }}</h2>
-            <p class="dialog-desc">{{ t('index.createDialog.desc') }}</p>
+            <p class="dialog-desc">{{ form.project_type === 'narration' ? t('index.createDialog.descNarration') : t('index.createDialog.desc') }}</p>
           </div>
         </div>
         <form @submit.prevent="create" class="dialog-form">
           <div class="dialog-body">
+            <!-- 项目类型：决定进入哪个工作台与哪套流程 -->
+            <div class="field">
+              <span class="field-label">{{ t('index.createDialog.type') }}</span>
+              <div class="type-cards">
+                <button
+                  v-for="opt in projectTypeOptions"
+                  :key="opt.value"
+                  type="button"
+                  class="type-card"
+                  :class="{ on: form.project_type === opt.value }"
+                  @click="form.project_type = opt.value"
+                >
+                  <span class="type-card-label">{{ opt.label }}</span>
+                  <span class="type-card-desc">{{ opt.desc }}</span>
+                </button>
+              </div>
+              <span class="field-hint">{{ t('index.createDialog.typeHint') }}</span>
+            </div>
             <label class="field">
               <span class="field-label">{{ t('index.createDialog.name') }} <span class="required">*</span></span>
               <input v-model="form.title" class="input" :placeholder="t('index.createDialog.namePlaceholder')" required autofocus />
@@ -221,7 +247,11 @@ const sortOptions = computed(() => ([
 const activeMenuId = ref(null)
 const dramaToDelete = ref(null)
 const deletingDrama = ref(false)
-const form = ref({ title: '', style: '', aspect_ratio: '16:9' })
+const form = ref({ title: '', style: '', aspect_ratio: '16:9', project_type: 'drama' })
+const projectTypeOptions = computed(() => ([
+  { value: 'drama', label: t('index.createDialog.typeDrama'), desc: t('index.createDialog.typeDramaDesc') },
+  { value: 'narration', label: t('index.createDialog.typeNarration'), desc: t('index.createDialog.typeNarrationDesc') },
+]))
 const stylePresets = ref([])
 const styleSelectOptions = computed(() => stylePresets.value.map(p => ({ label: p.name, value: p.value })))
 const selectedStyleDesc = computed(() => stylePresets.value.find(p => p.value === form.value.style)?.description || '')
@@ -308,7 +338,8 @@ async function create() {
   try {
     const d = await dramaAPI.create(form.value)
     showCreate.value = false
-    navigateTo(`/drama/${d.id}`)
+    // 类型决定工作台：口播视频走独立流程，漫剧走原有剧集工作台
+    navigateTo(d.project_type === 'narration' ? `/narration/${d.id}` : `/drama/${d.id}`)
   } catch (e) {
     toastError(e)
   }
@@ -337,8 +368,43 @@ function getEpisodeNumber(d) {
   return Number(episodes[0].episode_number || episodes[0].episodeNumber || 1)
 }
 
+/**
+ * 打开项目时的落地页：**必须按项目类型分流**。
+ * 之前这里写死 `/drama/:id`，导致口播项目第二次进入就变成漫剧控制台
+ * （创建那一次是分流的，只有重新进入这条路径没分流），既找不到口播数据，也可能误触漫剧流程。
+ */
 function getDramaPath(d) {
-  return `/drama/${d.id}`
+  return d?.project_type === 'narration' ? `/narration/${d.id}` : `/drama/${d.id}`
+}
+
+/** 类型标签文案（沿用创建弹框里的同一组文案） */
+function typeLabel(d) {
+  return d?.project_type === 'narration' ? t('index.createDialog.typeNarration') : t('index.createDialog.typeDrama')
+}
+
+/**
+ * 卡片元信息：漫剧看资产/集数，口播看目标时长。
+ * 口播项目没有角色/场景概念，沿用漫剧口径会显示成「0 角色 · 0 场景」，是噪音。
+ */
+function metaLabel(d) {
+  if (d?.project_type === 'narration') {
+    const sec = narrationTargetSec(d)
+    return sec
+      ? t('index.narrationMeta', { sec, eps: d.episodes?.length || 0 })
+      : t('index.narrationMetaNoDuration', { eps: d.episodes?.length || 0 })
+  }
+  return t('index.projectMeta', { chars: d.characters?.length || 0, scenes: d.scenes?.length || 0, eps: d.episodes?.length || 0 })
+}
+
+/** 从 metadata.narration 里取目标时长（坏 JSON / 缺失都返回 null，不让列表崩） */
+function narrationTargetSec(d) {
+  try {
+    const meta = typeof d?.metadata === 'string' ? JSON.parse(d.metadata) : d?.metadata
+    const sec = Number(meta?.narration?.targetDurationSec ?? meta?.narration?.target_duration_sec)
+    return Number.isFinite(sec) && sec > 0 ? Math.round(sec) : null
+  } catch {
+    return null
+  }
 }
 
 function openDrama(d) {
@@ -553,11 +619,13 @@ onMounted(() => setTimeout(() => autoTour('index', INDEX_TOUR, t), 600))
 .project-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 7px;
+  gap: 8px;  margin-top: 7px;
   font-size: 11.5px;
   flex-wrap: wrap;
 }
+/* 类型标签：比普通 tag 更紧凑，且不抢风格标签的强调色 */
+.type-tag { padding: 2px 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.tag-plain { background: var(--bg-hover); color: var(--text-2); }
 .project-foot {
   display: flex;
   align-items: center;
@@ -636,6 +704,18 @@ onMounted(() => setTimeout(() => autoTour('index', INDEX_TOUR, t), 600))
 }
 .dialog-body { display: flex; flex-direction: column; gap: 16px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
+/* 项目类型卡片：两选一并给出各自流程，避免选错工作台 */
+.type-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.type-card {
+  display: flex; flex-direction: column; gap: 5px; text-align: left; cursor: pointer;
+  padding: 11px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-elevated); color: var(--text-2); transition: all .15s ease;
+}
+.type-card:hover { border-color: var(--text-3); }
+.type-card.on { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent-glow) inset; }
+.type-card-label { font-size: 13px; font-weight: 650; color: var(--text-1); }
+.type-card.on .type-card-label { color: var(--accent-text); }
+.type-card-desc { font-size: 11px; line-height: 1.5; color: var(--text-3); }
 .field-label { font-size: 12px; font-weight: 600; color: var(--text-1); }
 .required { color: var(--error); }
 .field-hint { font-size: 11px; color: var(--text-3); line-height: 1.5; }

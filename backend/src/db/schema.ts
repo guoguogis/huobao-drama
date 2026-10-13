@@ -11,6 +11,8 @@ export const dramas = sqliteTable('dramas', {
   description: text('description'),
   genre: text('genre'),
   style: text('style').default('3d'),
+  /** 项目类型：drama=漫剧（默认，历史数据）/ narration=口播视频；不同类型走不同工作台 */
+  projectType: text('project_type').default('drama'),
   aspectRatio: text('aspect_ratio').default('16:9'),
   totalEpisodes: integer('total_episodes').default(1),
   totalDuration: integer('total_duration').default(0),
@@ -133,6 +135,20 @@ export const storyboards = sqliteTable('storyboards', {
   lastFrameImage: text('last_frame_image'),
   referenceImages: text('reference_images'),
   videoUrl: text('video_url'),
+  /** 口播视频：本镜头的旁白文本（逐句合成 TTS 的输入，句子边界=镜头边界） */
+  narrationText: text('narration_text'),
+  /** 口播视频：本镜头旁白的句级音频（实测时长用于画面重定时） */
+  narrationAudioUrl: text('narration_audio_url'),
+  narrationAudioDuration: real('narration_audio_duration'),
+  /** 口播视频：导出时该镜头应对齐到的时长（按实测音频计算） */
+  narrationTargetDuration: real('narration_target_duration'),
+  /**
+   * 口播视频：本段片段显式选用的首帧/尾帧图片路径。
+   * 关键帧可以保留多张候选，首尾帧默认取「本镜当前关键帧 → 下一镜当前关键帧」，
+   * 一旦用户显式选了某张候选就存在这里（空 = 跟随当前关键帧）。
+   */
+  clipFirstFrame: text('clip_first_frame'),
+  clipLastFrame: text('clip_last_frame'),
   subtitleUrl: text('subtitle_url'),
   composedVideoUrl: text('composed_video_url'),
   status: text('status').default('pending'),
@@ -199,6 +215,24 @@ export const stylePresets = sqliteTable('style_presets', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   // 注意: 此表无 deleted_at（硬删除），value 列有唯一索引（见 sqlite-schema.ts DDL）
+})
+
+// 口播视频：一个主题一次生成多个版本的口播稿，人工选定一版继续做分镜与音频
+export const narrationScripts = sqliteTable('narration_scripts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  dramaId: integer('drama_id').notNull(),
+  /** 版本序号（1..N，与生成顺序一致） */
+  versionIndex: integer('version_index').notNull(),
+  /** 版本切入角度（悬念式 / 数据式 / 故事式…），用于人工对比选择 */
+  angle: text('angle'),
+  title: text('title'),
+  content: text('content').notNull(),
+  charCount: integer('char_count').default(0),
+  /** 按当前语速估算的朗读时长（秒） */
+  estDurationSec: real('est_duration_sec').default(0),
+  isSelected: integer('is_selected', { mode: 'boolean' }).default(false),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
 })
 
 // 统一生成任务表：图片/视频生成共用，type 区分，生成参数存 params(JSON)

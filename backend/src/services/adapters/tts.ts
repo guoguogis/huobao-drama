@@ -125,8 +125,7 @@ function findAudioPayload(node: any, depth = 0, trusted = false): { base64?: str
 }
 
 /** 上游报错时的可读描述（各家错误字段不统一，尽量都覆盖） */
-export function describeTtsError(result: any): string | null {
-  const code = result?.code ?? result?.status_code ?? result?.base_resp?.status_code
+export function describeTtsError(result: any): string | null {  const code = result?.code ?? result?.status_code ?? result?.base_resp?.status_code
   const msg = result?.message ?? result?.msg ?? result?.Message
     ?? result?.base_resp?.status_msg ?? result?.error?.message ?? result?.error
   // code 为空或 0/3000 视为成功
@@ -153,6 +152,18 @@ export function actionableTtsHint(message: string): string {
   return ''
 }
 
+/**
+ * 倍率 → 百分比增量：豆包/Seed Speech 的 `speech_rate` 是整数百分比（0=原速，10=+10%），
+ * MiniMax 的 `speed` 才是倍率。项目里统一用倍率（1.1）表达，下发前按服务商换算。
+ * 上游允许范围约 -50~100，越界会被拒，这里直接钳制。
+ */
+export function speechRateDelta(speed?: number): number {
+  const s = Number(speed)
+  if (!Number.isFinite(s) || s <= 0) return 0
+  const delta = Math.round((s - 1) * 100)
+  return Math.min(100, Math.max(-50, delta))
+}
+
 class VolcengineTtsAdapter implements TtsProviderAdapter {
   provider = 'volcengine'
 
@@ -170,7 +181,9 @@ class VolcengineTtsAdapter implements TtsProviderAdapter {
         format,
         sample_rate: Number(settings.sample_rate) || 48000,
         pitch_rate: 0,
-        speech_rate: 0,
+        // 倍速：该接口的 speech_rate 是**整数百分比增量**（0=原速，10=快 10%），
+        // 不是倍率；配置里的倍速（如 1.1）必须换算后再下发，否则一律原速。
+        speech_rate: speechRateDelta(params.speed),
         loudness_rate: 0,
       },
       watermark: {},

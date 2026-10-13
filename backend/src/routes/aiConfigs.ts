@@ -58,6 +58,22 @@ function geminiHeaders(apiKey?: string, withJson = false) {
   return headers
 }
 
+/** 从上游错误响应里摘出可读原因（各网关字段不一：error.message / message / detail / error 字符串） */
+export function summarizeUpstreamError(text: string, maxLen = 220): string {
+  const raw = String(text || '').trim()
+  if (!raw) return '（上游未返回错误内容）'
+  let msg = ''
+  try {
+    const parsed = JSON.parse(raw)
+    const e = parsed?.error
+    msg = (typeof e === 'string' ? e : e?.message) || parsed?.message || parsed?.detail || ''
+  } catch {
+    msg = raw
+  }
+  const oneLine = String(msg || raw).replace(/\s+/g, ' ').trim()
+  return oneLine.length > maxLen ? `${oneLine.slice(0, maxLen)}…` : oneLine
+}
+
 export function buildProbe(
   serviceType: string,
   provider: string,
@@ -132,6 +148,19 @@ export function buildProbe(
   }
 
   if (p === 'openai') {
+    // 图片：探**真实的 POST 生成端点**（`/v1/images/generations`），空体探测。
+    // 空体在网关侧一定是参数校验失败（不会创建计费任务），但足以证明「POST 路径 + 鉴权」正常；
+    // 只探 `GET /v1/models` 会让「图片端点本身是否通」这件事看起来没问题（实测某网关 /models 200，
+    // 而 images/generations 实际 500，反而掩盖了真问题）。
+    if (serviceType === 'image') {
+      return {
+        method: 'POST',
+        url: joinProviderUrl(baseUrl, '/v1', '/images/generations'),
+        headers: bearerHeaders(apiKey, true),
+        body: {},
+      }
+    }
+    // 文本/视频：OpenAI 兼容网关普遍支持 /v1/models，用它做轻量鉴权探测（不产生费用）
     return {
       method: 'GET',
       url: joinProviderUrl(baseUrl, '/v1', '/models'),
@@ -469,9 +498,20 @@ app.post('/test', async (c) => {
     const text = await resp.text()
     const reachable = [200, 204, 400, 401, 403].includes(resp.status)
     // 图片/视频探针刻意不带 model（真实请求会创建计费任务），被上游按参数校验拒绝属预期结果。
-    // 它只说明端点可达，并不指向鉴权或路径问题，措辞不能误导成「配置可能有错」。
+    // 判据是「空体探测 + 400」：空体必然过不了参数校验，与 Base URL/鉴权无关；
+    // 不能再只认 MissingParameter 这几个词——不同网关措辞各异
+    // （实测某网关回 "Invalid model name passed in model=None"，于是被误报成「请检查 Base URL」）。
+    const probeBodyEmpty = !probe.body || Object.keys(probe.body).length === 0
+    // 图片/视频的空体 POST 探测：这类探测**刻意不带 model**，与用户配置无关，
+    // 上游对它的 400/5xx 都不能当作「配置有错」的证据
+    // （实测 88api 网关回 503 "No available channel for model dall-e"，正是缺 model 被当成 dall-e 所致，
+    //   而该配置真实生成完全正常）。
+    const billedRiskProbe = probe.method === 'POST' && probeBodyEmpty
+      && (body.service_type === 'image' || body.service_type === 'video')
     const missingParam = !resp.ok && resp.status === 400
-      && /MissingParameter|RequiredParameter|InvalidParameter/i.test(text)
+      && (billedRiskProbe || /MissingParameter|RequiredParameter|InvalidParameter/i.test(text))
+    // 5xx 是网关自身或其上游的故障：把上游原文带出来，别让用户去怀疑自己的 Base URL
+    const upstreamBroken = resp.status >= 500
     // 音频（TTS）探针必须看**响应体**：MiniMax 鉴权失败时依旧返回 HTTP 200，
     // 错误藏在 base_resp.status_code 里；只看状态码会把坏 key 报成「可达」。
     let providerError: string | null = null
@@ -512,13 +552,20 @@ app.post('/test', async (c) => {
       url: probeUrl,
       message: providerError
         ? `上游拒绝了本次探测：${providerError}`
-        : reachable
-          ? (resp.ok
-            ? `端点可访问，认证与路径基本正常${audioHint}`
-            : missingParam
-              ? '端点可达（非 404/401）；上游按参数校验拒绝了未携带 model 的探测请求，图片/视频配置出现该结果属预期'
-              : '端点已响应，请根据状态码判断认证或路径是否正确')
-          : '端点未按预期响应，请检查 Base URL 和代理前缀',
+        : upstreamBroken
+          ? billedRiskProbe
+            ? `探测请求刻意不带 model（避免创建计费任务），上游回了 HTTP ${resp.status}：${summarizeUpstreamError(text)}。` +
+              `空体探测在部分网关会被当作「缺失 model」的请求（例如默认成 dall-e 再报无可用通道），` +
+              `因此这个 5xx 不能判定配置有错——请用一次真实生成确认`
+            : `上游网关报错（HTTP ${resp.status}）：${summarizeUpstreamError(text)}。` +
+              `这类 5xx 来自网关自身或其上游服务，通常不是 Base URL 配置问题——把这段原文发给网关提供方排查`
+          : reachable
+            ? (resp.ok
+              ? `端点可访问，认证与路径基本正常${audioHint}`
+              : missingParam
+                ? '端点可达（非 404/401）；上游按参数校验拒绝了未携带 model 的探测请求，图片/视频配置出现该结果属预期'
+                : '端点已响应，请根据状态码判断认证或路径是否正确')
+            : '端点未按预期响应，请检查 Base URL 和代理前缀',
       response_preview: text.slice(0, 400),
     }
     if (payload.reachable) {

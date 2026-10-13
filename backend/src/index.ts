@@ -25,6 +25,7 @@ import storage from './routes/storage.js'
 import serverUpdate from './routes/serverUpdate.js'
 import auth from './routes/auth.js'
 import audio from './routes/audio.js'
+import narration from './routes/narration.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
 import { seedAuthAccount, getAuthUsername } from './services/auth.js'
@@ -80,6 +81,8 @@ api.route('/settings', settings)
 api.route('/server-update', serverUpdate)
 api.route('/auth', auth)
 api.route('/audio', audio)
+// 口播视频场景：与漫剧链路并列，互不影响
+api.route('/narration', narration)
 
 app.route('/api/v1', api)
 

@@ -46,6 +46,14 @@
             :show-config="videoModelMultiCfg"
           />
           <ModelSelect
+            v-if="audioModelOptions.length"
+            v-model="audioModel"
+            :label="t('common.serviceType.audio')"
+            :options="audioModelOptions"
+            :default-label="t('episode.model.defaultWith', { model: audioModelOptions[0].model })"
+            :show-config="audioModelMultiCfg"
+          />
+          <ModelSelect
             v-model="episodeResolution"
             :label="t('episode.topbar.resolution')"
             :options="resolutionOptions"
@@ -835,6 +843,16 @@
                   </section>
                   <div class="video-inspector-effective">
                     {{ t('episode.inspector.effective', { model: effectiveVideoModelLabel || t('episode.vid.defaultModel'), res: episodeResolutionShort, dur: effectiveVideoDuration }) }}
+                  </div>
+                  <!-- 模型族与素材模式不匹配：点生成前就能看到原因与替代模型 -->
+                  <div v-if="videoModelMediaIssue(selectedSb)" class="video-model-warn">
+                    <span>{{ videoModelMediaIssue(selectedSb) }}</span>
+                    <button
+                      v-if="referenceCapableModel"
+                      type="button"
+                      class="btn btn-sm"
+                      @click="switchToReferenceCapableModel"
+                    >{{ t('episode.vid.switchModel', { model: referenceCapableModel.model }) }}</button>
                   </div>
                   <button
                     class="btn btn-primary video-inspector-action"
@@ -1754,6 +1772,11 @@ import { startTour, autoTour } from '~/composables/useTour'
 import { useAgent } from '~/composables/useAgent'
 import { toastError, mapError, MODERATION_RE } from '~/composables/useToast'
 import LocaleSwitcher from '~/components/LocaleSwitcher.vue'
+// 顶栏模型选择的共用逻辑（与口播工作台同一套 key 语义，见 app/utils/model-picks.ts）
+import {
+  MODEL_STORE_KEYS, collectModelOptions, bareModelName, ownerConfigId, hasMultiConfigs,
+  readStoredModel, storeModel,
+} from '~/utils/model-picks'
 
 definePageMeta({ layout: 'studio' })
 
@@ -2040,23 +2063,27 @@ const prodTabIdx = computed({
 const imageConfigs = ref([])
 const videoConfigs = ref([])
 const textConfigs = ref([])
+// 音频配置在下方 TTS 面板处声明（audioConfigs）；这里的选择依赖它是懒求值的，先声明可用
+const audioModel = ref(readStoredModel(MODEL_STORE_KEYS.audio))
 // 生成时可选模型：空串 = 跟随配置默认（models[0]）；选择持久化到 localStorage，刷新页面后保留
-const MODEL_STORE_KEYS = { chat: 'huobao:model:chat', image: 'huobao:model:image', video: 'huobao:model:video' }
-function readStoredModel(key, legacyKey = '') {
-  try { return localStorage.getItem(key) || (legacyKey && localStorage.getItem(legacyKey)) || '' } catch { return '' }
-}
+// 存储键与读取实现与口播工作台共用（见 app/utils/model-picks.ts），两边选择互通
 // 顶栏文本模型：适用于所有 Chat Agent 调用（改写/提取/拆镜/视频提示词/最终提示词），空串 = 跟随配置默认
 const chatModel = ref(readStoredModel(MODEL_STORE_KEYS.chat, 'huobao:model:rewrite'))
 const imageModel = ref(readStoredModel(MODEL_STORE_KEYS.image))
 const videoModel = ref(readStoredModel(MODEL_STORE_KEYS.video))
+/** 选择变化即持久化（与口播工作台共用存储键：换模型后到哪都是这个选择） */
 function persistModel(modelRef, key) {
-  watch(modelRef, v => {
-    try { v ? localStorage.setItem(key, v) : localStorage.removeItem(key) } catch {}
-  })
+  watch(modelRef, v => storeModel(key, v))
 }
 persistModel(chatModel, MODEL_STORE_KEYS.chat)
 persistModel(imageModel, MODEL_STORE_KEYS.image)
 persistModel(videoModel, MODEL_STORE_KEYS.video)
+persistModel(audioModel, MODEL_STORE_KEYS.audio)
+// 顶栏「音频」选择器：选项来自音频服务配置（懒求值，audioConfigs 在下方声明）
+const audioModelOptions = computed(() => collectModelOptions(audioConfigs.value))
+const audioModelMultiCfg = computed(() => hasMultiConfigs(audioModelOptions.value))
+/** 顶栏音频选择所属的配置 id（用于与 TTS 面板的服务下拉互相同步） */
+const audioPickConfigId = computed(() => ownerConfigId(audioModelOptions.value, audioModel.value))
 // 左侧菜单栏收起/展开：收起为窄图标栏给内容区让位，持久化到 localStorage
 const SIDEBAR_COLLAPSED_KEY = 'huobao:sidebar-collapsed'
 const sidebarCollapsed = ref((() => {
@@ -2632,49 +2659,9 @@ async function changeEpisodeResolution(val) {
 // 画面比例在创建项目时固定，视频生成统一使用
 const dramaAspectRatio = computed(() => drama.value?.aspect_ratio || drama.value?.aspectRatio || '16:9')
 
-// 生成可选模型列表：配置中的模型数组（首位为配置默认）；API 可能返回数组或 JSON 字符串
-function configModels(cfg) {
-  const raw = cfg?.model
-  if (!raw) return []
-  if (Array.isArray(raw)) return raw.filter(Boolean)
-  try { const m = JSON.parse(raw); return Array.isArray(m) ? m.filter(Boolean) : [m].filter(Boolean) } catch { return [raw].filter(Boolean) }
-}
-// 汇总该类型全部启用配置的模型（按优先级排序），选中模型时连同所属配置一起调用
+// 生成可选模型列表：配置中的模型数组（首位为配置默认）；实现与口播工作台共用 app/utils/model-picks.ts
 // 选中值 = 'provider/model@配置id'：同名模型可能来自不同厂商，也可能来自同一厂商的不同配置
 // （例如同一 MiniMax-H3 既有官方直连也有私有中转）——必须带上配置 id，否则第二份配置的同一模型根本选不到
-function collectModelOptions(cfgs) {
-  const seen = new Set()
-  const out = []
-  const sorted = [...cfgs].filter(c => c.is_active).sort((a, b) => (b.priority || 0) - (a.priority || 0))
-  for (const c of sorted) {
-    for (const m of configModels(c)) {
-      const key = `${c.provider}/${m}@${c.id}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ key, model: m, provider: c.provider, configId: c.id, configName: c.name || '' })
-    }
-  }
-  return out
-}
-// 复合键 → 裸模型名（后端适配器按厂商校验模型名，不能带 provider 前缀或 @配置id 后缀）
-function bareModelName(key) {
-  if (!key) return ''
-  const at = key.indexOf('@')
-  const bare = at >= 0 ? key.slice(0, at) : key
-  const i = bare.indexOf('/')
-  return i >= 0 ? bare.slice(i + 1) : bare
-}
-function ownerConfigId(options, key) {
-  if (!key) return undefined
-  const exact = options.find(o => o.key === key)
-  if (exact) return exact.configId || undefined
-  // 兼容改造前存下的 'provider/model' 形式
-  const legacy = options.find(o => `${o.provider}/${o.model}` === key)
-  return legacy?.configId || undefined
-}
-function hasMultiConfigs(options) {
-  return new Set(options.map(o => o.configId)).size > 1
-}
 const textModelOptions = computed(() => collectModelOptions(textConfigs.value))
 const imageModelOptions = computed(() => collectModelOptions(imageConfigs.value))
 const videoModelOptions = computed(() => collectModelOptions(videoConfigs.value))
@@ -2695,6 +2682,43 @@ const resolvedVideoModel = computed(() =>
 // 早先按 provider === 'aliyun' 判定，会让 HappyHorse 套用 Wan 的时长档位与素材上限。
 const isWan3Video = computed(() => resolvedVideoModel.value.startsWith('wan3.0-video'))
 const isHappyHorseVideo = computed(() => resolvedVideoModel.value.startsWith('happyhorse-'))
+
+/**
+ * 视频模型与「素材模式」的匹配检查（返回可展示的问题文案，空串表示没问题）。
+ *
+ * 工作台的视频生成**总会**下发分镜绑定的参考图，而 HappyHorse 三个族的要求不同：
+ *   - t2v 文生视频：不接受任何 media → 有参考图时必然被后端拒绝
+ *   - i2v 图生视频：只接受恰好 1 张 first_frame（工作台不产出首帧模式）→ 用不了
+ *   - r2v 参考生视频：1~9 张参考图 ← 与工作台的参考图流程对应，这也是官方语义
+ * 后端同样会拒绝（权威校验），这里只是把失败提前到点击之前，并给出可替换的模型。
+ */
+function videoModelMediaIssue(sb) {
+  const model = String(resolvedVideoModel.value || '')
+  const lower = model.toLowerCase()
+  if (!lower.startsWith('happyhorse-')) return ''
+  const refs = sb ? getShotReferenceImages(sb).length : 0
+  if (lower.includes('-i2v')) return t('episode.vid.modelNeedsFirstFrame', { model })
+  if (lower.includes('-t2v') && refs) return t('episode.vid.modelRejectsRefs', { model, n: refs })
+  if (lower.includes('-r2v') && !refs) return t('episode.vid.modelNeedsRefs', { model })
+  return ''
+}
+
+/** 同配置优先的「参考生视频」模型（happyhorse-*-r2v）：用于一键替换不匹配的模型 */
+const referenceCapableModel = computed(() => {
+  const lower = String(resolvedVideoModel.value || '').toLowerCase()
+  if (!lower.startsWith('happyhorse-') || lower.includes('-r2v')) return null
+  const candidates = videoModelOptions.value.filter(o => String(o.model || '').toLowerCase().includes('-r2v'))
+  if (!candidates.length) return null
+  const current = videoModelOptions.value.find(o => o.key === videoModel.value)
+  return candidates.find(o => o.configId === current?.configId) || candidates[0]
+})
+
+function switchToReferenceCapableModel() {
+  const target = referenceCapableModel.value
+  if (!target) return
+  videoModel.value = target.key
+  toast.success(t('episode.vid.modelSwitched', { model: target.model }))
+}
 
 // 时长档位：Wan 3.0 2~30（-1 交给模型）、HappyHorse 3~15、其余 4~15
 const videoDurationRange = computed(() => {
@@ -2739,9 +2763,14 @@ function retryFailedVideos() {
   openBatchVideoConfirm(sbs.value.filter(s => videoTaskState(s) === 'failed'))
 }
 function confirmBatchVideos() {
-  const targets = [...batchVideoConfirm.value.targets]
+  const all = [...batchVideoConfirm.value.targets]
   batchVideoConfirm.value = { open: false, targets: [] }
-  if (!targets.length) return
+  if (!all.length) return
+  // 批量前先过滤掉「当前模型不能生成」的镜头：否则会提示"已开始"但一个都没跑
+  const targets = all.filter(sb => !videoModelMediaIssue(sb))
+  const skipped = all.length - targets.length
+  if (!targets.length) { toast.error(videoModelMediaIssue(all[0])); return }
+  if (skipped) toast.warning(t('episode.vid.batchSkipped', { n: skipped }))
   const ids = targets.map(s => s.id)
   targets.forEach(sb => genVid(sb, { silent: true }))
   toast.success(t('episode.vid.batchStarted', { n: ids.length }))
@@ -3200,7 +3229,14 @@ watch(scriptContent, v => { localScript.value = v }, { immediate: true })
 
 async function refresh() {
   try {
-    drama.value = await dramaAPI.get(dramaId)
+    const d = await dramaAPI.get(dramaId)
+    // 口播项目不该落到漫剧集工作台：这里的分镜拆解/改写会整批替换镜头，
+    // 对口播项目等于毁数据 —— 一律送回它的工作台
+    if (d?.project_type === 'narration') {
+      await navigateTo(`/narration/${dramaId}`, { replace: true })
+      return
+    }
+    drama.value = d
     const ep = drama.value.episodes?.find(e => (e.episode_number || e.episodeNumber) === episodeNumber)
     if (ep) {
       episode.value = ep
@@ -4042,6 +4078,20 @@ const ttsText = ref('')
 /** 情绪（MiniMax 支持：happy/sad/angry/fearful/disgusted/surprised/neutral），留空则用服务配置里的默认值 */
 const ttsEmotion = ref('')
 
+/**
+ * 顶栏「音频」选择器 ↔ 本面板的「服务」下拉：同一个选择的两个入口，必须互相同步，
+ * 否则会出现「顶栏显示 A 服务、面板显示 B 服务」的矛盾读数。
+ */
+watch(audioPickConfigId, (id) => {
+  if (id && id !== ttsConfigId.value) ttsConfigId.value = id
+})
+watch(ttsConfigId, (id) => {
+  if (!id) return
+  if (ownerConfigId(audioModelOptions.value, audioModel.value) === id) return
+  const first = audioModelOptions.value.find(o => o.configId === id)
+  if (first) audioModel.value = first.key
+})
+
 const selectedAudioConfig = computed(() => audioConfigs.value.find(c => c.id === ttsConfigId.value) || null)
 /** 豆包是 voice_type（BV 开头），MiniMax 是 voice_id */
 const ttsVoicePlaceholder = computed(() =>
@@ -4070,6 +4120,8 @@ async function generateVoiceByTts(item) {
       voice_id: ttsVoiceId.value.trim(),
       emotion: ttsEmotion.value.trim() || undefined,
       config_id: ttsConfigId.value,
+      // 顶栏可能指定了该配置下的具体模型（不传则用配置首个模型）
+      model: bareModelName(audioModel.value) || undefined,
       format: 'mp3',
     })
     await characterAPI.update(item.id, {
@@ -4165,6 +4217,12 @@ function voiceMappingLine(names) {
 }
 
 async function genVid(sb, opts = {}) {
+  // 模型族与素材模式不匹配时提前拦下：后端也会拒绝，但那样要等一轮请求才知道原因
+  const modelIssue = videoModelMediaIssue(sb)
+  if (modelIssue) {
+    toast.error(modelIssue)
+    return
+  }
   const referenceImages = getShotReferenceImages(sb)
   // 音色样本（可选）：只有真的设置了样本才下发 character_voice_urls；
   // 同时把「第 N 段音频 = 哪个角色」写进提示词，否则多角色音色无法区分
@@ -5975,6 +6033,20 @@ button.video-task-metric.on { box-shadow: 0 0 0 2px var(--accent); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* 模型与素材模式不匹配的提示（警告色，含一键替换模型） */
+.video-model-warn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: 11px;
+  line-height: 1.5;
 }
 /* 生成参数：强调卡片，时长是当前分镜生成的核心参数 */
 .video-params-card {
