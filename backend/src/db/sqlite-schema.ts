@@ -386,6 +386,46 @@ export const stylePresetSeeds = [
     prompt: 'VOX-style paper-collage editorial illustration, clean cut-paper collage built from large flat paper planes with controlled torn edges, layered cutouts with explicit foreground / subject / background depth, soft drop shadows so every paper piece floats just above the layer beneath, subtle deliberate rotation on individual pieces, limited matte editorial palette anchored on deep indigo #071826, rice paper #E8D6B8, bronze #A6723F, cinnabar #A33A2B, mist blue #7EA7B8, warm white #F7F2E8 and ink black #171512 accents, one focal subject with one supporting action and one environmental detail per scene, explanatory infographic vocabulary of maps, process chains, cross-sections, exploded diagrams, magnitude counters and bottleneck or failure states, restrained annotation leader lines kept clear of faces and hands, even soft lighting, spotless paper backgrounds, crisp edges, pure controlled colors, refined materials, polished editorial finish, consistent character design across shots, no text rendered in the image, avoid photorealistic rendering, avoid 3D CGI look, avoid anime cel shading, avoid painterly soft blending, avoid random tape, avoid decorative mask and line clutter, avoid persistent zoom and meaningless shake, avoid grain, noise, dust, stains, dirty texture, mottled spots, film grain, compression artifacts, pixelation, oversharpening, distressed aging, random fibers, excessive fragments, visual clutter, watermark, logo, unintended text',
     description: 'VOX 纸片拼贴科普风：大面积纸面 + 受控撕裂边缘 + 分层剪贴，优先地图/流程链/剖面/计数器等信息图表达',
   },
+  {
+    name: '水墨国风', value: 'ink', sortOrder: 10,
+    prompt: 'traditional Chinese ink-wash (shuimo) painting style, expressive freehand brushwork with dry-brush flying-white strokes, calligraphic line quality, layered ink washes from pale mist gray to deep saturated black, selective cinnabar and indigo color accents, visible xuan paper fiber texture, soft diffused atmospheric light, generous negative space suggesting mist and distance, restrained monochrome literati palette, elegant traditional painting quality, consistent character design across shots, avoid heavy opaque color fills, avoid western comic ink outlines, avoid 3D render look, avoid photorealism, avoid cluttered excessive detail',
+    description: '中国水墨画风：飞白笔触 + 墨色浓淡分层 + 留白构图，适合仙侠/古风/武侠',
+  },
+  {
+    name: '赛博朋克', value: 'cyberpunk', sortOrder: 11,
+    prompt: 'cyberpunk science-fiction concept-art digital painting, cinematic film still, sleek industrial silhouettes with techwear and augmented cybernetic details, glossy rain-wet surfaces with mirror reflections, brushed metal and neon tubing, high-contrast neon lighting with cyan magenta and violet rim light, volumetric fog and bloom, deep blue-black base palette with saturated neon accents, dense rain-slicked futuristic city with holographic signage layered in depth, AAA game cinematic key-art quality, consistent character design across shots, avoid flat cel shading, avoid watercolor texture, avoid warm daylight, avoid bright cheerful clean look, avoid 3D cartoon style, avoid photorealism',
+    description: '赛博朋克科幻风：霓虹光带 + 雨夜湿滑反射 + 青紫高对比，适合科幻/都市异能',
+  },
+  {
+    name: '黏土定格', value: 'clay', sortOrder: 12,
+    prompt: 'stop-motion claymation still, handcrafted plasticine figures, rounded hand-sculpted forms with slightly asymmetrical charm, visible fingerprint impressions tool marks and seam lines, matte clay surface with fabric and felt accents, warm practical miniature-set lighting with soft shadows, shallow depth of field, warm pastel earthy clay palette, handbuilt miniature diorama set with tiny crafted props and cardboard scenery, tactile handmade stop-motion photography quality, consistent character design across shots, avoid photorealistic human skin, avoid glossy 3D CG render, avoid anime cel shading, avoid digital cleanliness, avoid smooth plastic sheen',
+    description: '黏土定格动画风：塑性黏土 + 指纹工具痕 + 微缩手工置景，触感系',
+  },
+  {
+    name: '潮玩盲盒 3D', value: 'vinyl-toy', sortOrder: 13,
+    prompt: 'designer vinyl toy 3D render, collectible blind-box figure aesthetic, chunky rounded proportions with oversized head and simplified adorable facial features, smooth matte vinyl surface with soft glossy highlights, clean soft studio three-point lighting with even softbox, candy pastel and pop color blocking, minimal seamless studio backdrop or simple gradient, high-end collectible product render quality, consistent character design across shots, avoid realistic human anatomy, avoid gritty textures, avoid dark moody lighting, avoid anime line art, avoid photorealistic skin, avoid busy background',
+    description: '潮玩盲盒风：搪胶质感 + 圆润夸张比例 + 棚拍柔光，角色向/甜宠',
+  },
+  {
+    name: '像素风', value: 'pixel', sortOrder: 14,
+    prompt: '16-bit pixel art, retro console game sprite aesthetic, hard-edged pixel blocks at limited resolution with clearly readable silhouettes, dithered gradient shading in two to three tone steps, tight limited retro palette, tiled pixel-art scenery background, crisp clean pixel grid with no anti-aliasing, authentic retro game key art quality, consistent character design across shots, avoid smooth gradients, avoid anti-aliasing, avoid high-detail rendering, avoid 3D render look, avoid photorealism, avoid blurry upscaled look',
+    description: '16-bit 像素风：有限调色板 + 硬边块面 + 抖动渐变，复古游戏感',
+  },
+  {
+    name: '浮世绘和风', value: 'ukiyoe', sortOrder: 15,
+    prompt: 'traditional Japanese ukiyo-e woodblock print style, bold flowing contour lines carved with woodblock character, flat stylized shapes, flat color planes with visible woodgrain and registration marks, subtle karazuri embossing texture, decorative flat composition without realistic lighting, indigo aizuri palette with vermilion ochre and muted mineral pigments, stylized cloud bands wave patterns and patterned textiles, museum-grade ukiyo-e print quality, consistent character design across shots, avoid realistic perspective shading, avoid 3D render look, avoid digital gradient glow, avoid photorealistic detail, avoid anime cel shading',
+    description: '浮世绘木版画风：平涂色块 + 粗墨线轮廓 + 靛蓝朱红矿物色，和风题材',
+  },
+  {
+    name: '油画厚涂', value: 'oil', sortOrder: 16,
+    prompt: 'traditional oil painting with heavy impasto technique, visible loaded brushstrokes and palette-knife work building a sculptural paint surface, layered glazes with rich pigments, visible canvas weave texture, chiaroscuro dramatic single-source lighting, deep earthy umber ochre and crimson palette, atmospheric painted environment background, museum fine-art oil painting quality, consistent character design across shots, avoid digital smoothness, avoid flat vector look, avoid anime cel shading, avoid 3D CGI look, avoid photographic realism, avoid airbrush gloss',
+    description: '油画厚涂风：可见笔触堆料 + 伦勃朗明暗 + 画布纹理，文艺/史诗向',
+  },
+  {
+    name: '美式扁平卡通', value: 'flat-cartoon', sortOrder: 17,
+    prompt: 'modern Western flat cartoon TV animation style, bold uniform black outlines, simplified geometric shapes with exaggerated expressive features, flat unshaded color fills, minimal flat lighting with occasional simple soft shadow, high-saturation pop color blocking with bold clashing hues, simplified flat-shape minimal-detail backgrounds, clean vector-like crispness at broadcast animation quality, consistent character design across shots, avoid realistic shading, avoid gradients, avoid 3D render look, avoid painterly texture, avoid photorealistic detail, avoid anime style eyes',
+    description: '美式扁平卡通：粗黑描边 + 平涂高饱和撞色 + 简化造型，喜剧/吐槽向',
+  },
 ]
 
 /**
