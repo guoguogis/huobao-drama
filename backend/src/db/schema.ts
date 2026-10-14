@@ -218,6 +218,30 @@ export const stylePresets = sqliteTable('style_presets', {
 })
 
 // 口播视频：一个主题一次生成多个版本的口播稿，人工选定一版继续做分镜与音频
+/**
+ * 口播字幕（每个成片一份）：
+ * - lines：字幕行 JSON（含起止时间与文本），初次从成片时间轴生成，之后**独立编辑**，
+ *   改字幕不会连带改动配音与画面；
+ * - style：样式 JSON（字号/颜色/描边/位置/每行字数/整体偏移）；
+ * - 三条产物路径：SRT 本体、硬烧成片、软字幕成片，可并存对比。
+ */
+export const narrationSubtitles = sqliteTable('narration_subtitles', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  mergeId: integer('merge_id').notNull(),
+  dramaId: integer('drama_id').notNull(),
+  /** 字幕行 JSON：[{index, shot_id, shot_number, start, end, text}] */
+  lines: text('lines'),
+  /** 样式 JSON */
+  style: text('style'),
+  srtPath: text('srt_path'),
+  burnedPath: text('burned_path'),
+  softPath: text('soft_path'),
+  status: text('status').default('draft'), // draft | rendering | ready | failed
+  errorMsg: text('error_msg'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
 export const narrationScripts = sqliteTable('narration_scripts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   dramaId: integer('drama_id').notNull(),
@@ -270,6 +294,11 @@ export const videoMerges = sqliteTable('video_merges', {
   status: text('status').default('pending'),
   scenes: text('scenes'), // JSON
   mergedUrl: text('merged_url'),
+  /**
+   * 合并时的逐段实测时间轴（JSON）：`[{shot_id, shot_number, start, end, duration, text}]`。
+   * 字幕必须复用这一份，而不是自己再算一遍——否则音、画、字会各自漂移。
+   */
+  timeline: text('timeline'),
   duration: integer('duration'),
   taskId: text('task_id'),
   errorMsg: text('error_msg'),

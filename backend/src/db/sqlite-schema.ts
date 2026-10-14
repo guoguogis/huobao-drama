@@ -133,6 +133,24 @@ export const sqliteSchemaStatements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_narration_scripts_drama_id ON narration_scripts (drama_id)`,
 
+  // 口播字幕：每个成片一份，含独立编辑的字幕行与样式，以及 SRT / 硬烧 / 软字幕三条产物
+  `CREATE TABLE IF NOT EXISTS narration_subtitles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merge_id INTEGER NOT NULL,
+    drama_id INTEGER NOT NULL,
+    lines TEXT,
+    style TEXT,
+    srt_path TEXT,
+    burned_path TEXT,
+    soft_path TEXT,
+    status TEXT DEFAULT 'draft',
+    error_msg TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_narration_subtitles_merge_id ON narration_subtitles (merge_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_narration_subtitles_drama_id ON narration_subtitles (drama_id)`,
+
   `CREATE TABLE IF NOT EXISTS episode_characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     episode_id INTEGER NOT NULL,
@@ -439,6 +457,10 @@ export function initSqliteSchema(sqlite: Database.Database) {
     // 片段首尾帧的显式选用（关键帧可保留多张候选，这里记住用户挑了哪两张）
     clip_first_frame: 'TEXT',
     clip_last_frame: 'TEXT',
+  })
+  // 成片的逐段实测时间轴：字幕与合并共用同一份，避免二次计算漂移
+  ensureColumns(sqlite, 'video_merges', {
+    timeline: 'TEXT',
   })
   const insertSeed = sqlite.prepare(SEED_SQL)
   const upgradeSeed = sqlite.prepare(UPGRADE_SQL)

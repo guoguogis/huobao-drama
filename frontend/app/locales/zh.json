@@ -1078,7 +1078,8 @@
       "clips": "首尾帧片段",
       "audio": "逐句配音",
       "export": "拼接导出",
-      "merges": "成片列表"
+      "merges": "成片列表",
+      "subtitles": "字幕"
     },
     "meta": {
       "rate": "倍速 {rate}×",
@@ -1146,7 +1147,7 @@
       "regenerate": "重新生成",
       "started": "已提交 {n} 个视频生成任务",
       "failed": "生成片段失败",
-      "lastHint": "最后一镜没有下一帧，导出时会用它的关键帧做定帧收尾；如需动画可单独为该镜生成片段。",
+      "lastHint": "最后一镜没有下一帧，仍可按它的关键帧 + 提示词生成动态片段（单图生视频）；不生成的话，导出时用这张关键帧做定帧收尾。",
       "generating": "生成中…",
       "generatingFor": "生成中 · 已用 {sec}s",
       "generatingHint": "视频生成通常 1~5 分钟",
@@ -1194,7 +1195,6 @@
       "resolutionDefault": "配置默认",
       "modelDefault": "配置默认模型",
       "effective": "本次生成将使用：{model} · {res} · {dur}s（时长按旁白实测对齐）",
-      "modelIssue": "当前视频模型 {model} 不接受首尾帧素材，生成会直接失败——请换用支持首尾帧的模型",
       "switchModel": "换用 {model}",
       "emptyGenerating": "片段生成中…",
       "emptyGeneratingDesc": "视频生成通常需要 1~5 分钟，完成后会出现在下方历史里",
@@ -1232,7 +1232,14 @@
       "frameChooseFailed": "首尾帧选用失败",
       "resetFrames": "恢复默认",
       "resetFramesHint": "取消显式选用，恢复为「本镜 → 下一镜当前关键帧」",
-      "framesReset": "已恢复默认首尾帧"
+      "framesReset": "已恢复默认首尾帧",
+      "singleFrameHint": "这一镜只有首帧：将按首帧 + 提示词生成动态片段（不需要尾帧）。",
+      "modelIssueNoMedia": "当前视频模型 {model} 不接受任何图片素材，无法按首帧生成——请换用支持首帧（图生视频）的模型",
+      "modelIssueReference": "当前视频模型 {model} 只接受参考图、不认首/尾帧——请换用支持首尾帧的模型",
+      "modelIssueFirstOnly": "当前视频模型 {model} 只允许 1 张首帧（不能同时给尾帧）——它适合最后一镜；本段要同时给首尾帧，请换用支持首尾帧的模型",
+      "isCurrentClip": "当前成片片段",
+      "useAsClipDisabledHint": "还没有可用的生成版本：先在下方生成片段（或点历史里的某条记录再选用）",
+      "detailDisabledHint": "这一段还没有生成记录：生成后会显示模型、参数、耗时与提示词"
     },
     "audio": {
       "title": "逐句配音",
@@ -1281,6 +1288,39 @@
       "close": "关闭",
       "prev": "上一镜",
       "next": "下一镜"
+    },
+    "subs": {
+      "title": "字幕",
+      "desc": "在已成片的基础上加字幕：字幕行复用成片时间轴生成，之后可独立编辑（不影响配音与画面）。",
+      "needMerge": "还没有可用的成片：先到「拼接导出」生成一版成片，再回来加字幕。",
+      "pickMerge": "选择成片",
+      "reload": "读取",
+      "save": "保存字幕",
+      "saved": "字幕已保存",
+      "saveFailed": "字幕保存失败",
+      "loadFailed": "字幕读取失败",
+      "noLines": "这份成片还没有字幕行（成片时间轴为空）。",
+      "style": "字幕样式",
+      "maxChars": "每行最多字数",
+      "fontSize": "字号",
+      "offset": "整体偏移（秒）",
+      "outline": "描边粗细",
+      "marginV": "距底部",
+      "color": "文字颜色",
+      "styleHint": "样式只影响烧录结果；修改后重新渲染即可，源成片不受影响。",
+      "render": "生成字幕产物",
+      "renderBoth": "硬烧 + 软字幕",
+      "renderBurn": "只硬烧",
+      "renderSoft": "只软字幕",
+      "renderHint": "硬烧会重编码画面（兼容性最好）；软字幕只封装、几乎瞬时（播放器可开关，平台多不显示）。",
+      "rendering": "正在渲染…（硬烧整片需要一些时间）",
+      "renderStarted": "已开始渲染字幕",
+      "renderDone": "字幕渲染完成",
+      "renderFailed": "字幕渲染失败",
+      "failed": "渲染失败",
+      "outputs": "产物",
+      "tagBurn": "硬烧",
+      "tagSoft": "软字幕"
     }
   },
   "errors": {

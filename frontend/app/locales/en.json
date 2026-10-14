@@ -1078,7 +1078,8 @@
       "clips": "First/last-frame clips",
       "audio": "Per-line voice-over",
       "export": "Merge & export",
-      "merges": "Final cuts"
+      "merges": "Final cuts",
+      "subtitles": "Subtitles"
     },
     "meta": {
       "rate": "{rate}× speed",
@@ -1146,7 +1147,7 @@
       "regenerate": "Regenerate",
       "started": "{n} video task(s) queued",
       "failed": "Clip generation failed",
-      "lastHint": "The last shot has no next keyframe: export holds its keyframe as an end freeze. Generate a clip for it if you want motion.",
+      "lastHint": "The last shot has no following frame, but you can still generate a motion clip from its keyframe + prompt (single-image to video). If you skip it, the export uses this keyframe as a freeze-frame ending.",
       "generating": "Generating…",
       "generatingFor": "Generating · {sec}s",
       "generatingHint": "Clips usually take 1–5 min",
@@ -1194,7 +1195,6 @@
       "resolutionDefault": "config default",
       "modelDefault": "config default model",
       "effective": "This run will use: {model} · {res} · {dur}s (duration follows measured narration)",
-      "modelIssue": "The current video model {model} does not accept first/last frames — generation will fail. Switch to a frame-capable model",
       "switchModel": "Switch to {model}",
       "emptyGenerating": "Generating clip…",
       "emptyGeneratingDesc": "Video generation usually takes 1–5 minutes; the result will appear in the history below",
@@ -1232,7 +1232,14 @@
       "frameChooseFailed": "Failed to set the frame",
       "resetFrames": "Reset to default",
       "resetFramesHint": "Clear the explicit choice and go back to this shot → next shot's keyframes",
-      "framesReset": "Frames reset to default"
+      "framesReset": "Frames reset to default",
+      "singleFrameHint": "This shot has only a first frame: the clip will be driven by the first frame + prompt (no last frame needed).",
+      "modelIssueNoMedia": "The current video model {model} accepts no image media, so it cannot use a first frame — switch to a frame-capable (image-to-video) model",
+      "modelIssueReference": "The current video model {model} only accepts reference images, not first/last frames — switch to a frame-capable model",
+      "modelIssueFirstOnly": "The current video model {model} allows exactly one first frame (no last frame) — it suits the last shot; this segment needs both, so switch to a model that accepts first+last frames",
+      "isCurrentClip": "Current clip",
+      "useAsClipDisabledHint": "No usable version yet — generate a clip below (or click a history entry first)",
+      "detailDisabledHint": "No generation record for this segment yet — model, params, duration and prompt appear after generating"
     },
     "audio": {
       "title": "Per-line voice-over",
@@ -1281,6 +1288,39 @@
       "close": "Close",
       "prev": "Prev",
       "next": "Next"
+    },
+    "subs": {
+      "title": "Subtitles",
+      "desc": "Add subtitles on top of a finished film: lines are generated from the film's timeline and can then be edited independently (narration and picture stay untouched).",
+      "needMerge": "No finished film yet — create one in “Merge & export”, then come back for subtitles.",
+      "pickMerge": "Film",
+      "reload": "Load",
+      "save": "Save subtitles",
+      "saved": "Subtitles saved",
+      "saveFailed": "Failed to save subtitles",
+      "loadFailed": "Failed to load subtitles",
+      "noLines": "This film has no subtitle lines (empty timeline).",
+      "style": "Subtitle style",
+      "maxChars": "Max chars/line",
+      "fontSize": "Font size",
+      "offset": "Global offset (s)",
+      "outline": "Outline",
+      "marginV": "Bottom margin",
+      "color": "Text colour",
+      "styleHint": "Style only affects the rendered output; re-render to apply. The source film is untouched.",
+      "render": "Render outputs",
+      "renderBoth": "Burn + soft",
+      "renderBurn": "Burn only",
+      "renderSoft": "Soft only",
+      "renderHint": "Burning re-encodes the picture (best compatibility); soft subtitles are just muxed (instant, toggleable, often hidden on platforms).",
+      "rendering": "Rendering… (burning a full film takes a while)",
+      "renderStarted": "Subtitle rendering started",
+      "renderDone": "Subtitles rendered",
+      "renderFailed": "Subtitle rendering failed",
+      "failed": "Render failed",
+      "outputs": "Outputs",
+      "tagBurn": "Burned",
+      "tagSoft": "Soft"
     }
   },
   "errors": {

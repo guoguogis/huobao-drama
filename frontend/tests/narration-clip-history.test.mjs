@@ -184,12 +184,13 @@ test('详情弹框展示生成参数与辅助信息（对齐漫剧详情）', ()
 })
 
 test('模型与「首尾帧」素材不匹配时，生成前就提示并给一键切换', () => {
-  // 真实失败：happyhorse 的 t2v/r2v/i2v 都不吃 first_frame/last_frame，白烧一次生成
-  assert.match(view, /const FRAME_INCAPABLE = \['happyhorse-1\.1-t2v', 'happyhorse-1\.1-r2v', 'happyhorse-1\.1-i2v'\]/)
-  assert.match(view, /function clipModelIssue\(pair\) \{[\s\S]{0,240}?return t\('narration\.clips\.modelIssue', \{ model \}\)/)
+  // 真实失败：happyhorse 的 t2v/r2v 都不吃首尾帧，白烧一次生成；
+  // 但 i2v 恰好吃 1 张首帧（适合最后一镜），所以判定按「当前需要的素材组合」细分（见下一条测试）
+  assert.match(view, /const MODEL_FRAME_SUPPORT = \{/)
+  assert.match(view, /function clipModelIssue\(pair\) \{[\s\S]{0,900}?return t\('narration\.clips\.modelIssueFirstOnly', \{ model \}\)/)
   assert.match(view, /v-if="clipModelIssue\(selectedClipPair\)" class="ns-vid-warn"/)
   assert.match(view, /v-if="frameCapableModel" type="button" class="btn btn-sm" @click="videoModel = frameCapableModel\.key"/)
-  assert.match(view, /const frameCapableModel = computed\(\(\) =>\s*\r?\n\s*videoModelOptions\.value\.find\(o => !FRAME_INCAPABLE\.includes\(o\.model\)\) \|\| null\)/)
+  assert.match(view, /const frameCapableModel = computed/)
 })
 
 test('片段提示词可编辑：失焦/Ctrl+Enter 提交，写回该镜头的 video_prompt', () => {
@@ -285,8 +286,9 @@ test('片段首尾帧可从多张候选里选用，并落库', () => {
   // 生效值：显式选用优先，否则回落到当前关键帧
   assert.match(view, /function effectiveFirstFrame\(pair\) \{\s*\r?\n\s*return pair\?\.shot\?\.clip_first_frame \|\| pair\?\.shot\?\.keyframe_image \|\| ''/)
   assert.match(view, /function effectiveLastFrame\(pair\) \{\s*\r?\n\s*return pair\?\.shot\?\.clip_last_frame \|\| pair\?\.next \|\| ''/)
-  // 生成时用的是生效值（否则选了也白选）
-  assert.match(view, /first_frame_url: effectiveFirstFrame\(p\),\s*\r?\n\s*last_frame_url: effectiveLastFrame\(p\),/)
+  // 生成时用的是生效值（否则选了也白选）；尾帧可能没有（最后一镜），此时不下发
+  assert.match(view, /first_frame_url: effectiveFirstFrame\(p\),/)
+  assert.match(view, /last_frame_url: effectiveLastFrame\(p\) \|\| undefined,/)
   // 候选条：本镜候选给首帧、下一镜候选给尾帧
   assert.match(view, /const nextShot = shots\.value\[i \+ 1\] \|\| null/)
   assert.match(view, /const shot = side === 'first' \? pair\.shot : pair\.nextShot/)
@@ -298,6 +300,63 @@ test('片段首尾帧可从多张候选里选用，并落库', () => {
   assert.match(view, /v-if="framesOverridden\(selectedClipPair\)"[\s\S]{0,320}?t\('narration\.clips\.resetFrames'\)/)
   // 参考帧上标出"已改选"
   assert.match(view, /overridden: !!pair\.shot\.clip_first_frame/)
+})
+
+test('最后一镜只有首帧也必须能生成（真实反馈的逻辑错误）', () => {
+  // 原实现要求 p.next（下一镜关键帧）才允许生成 → 最后一镜永远不能出片，是错的。
+  // 后端适配器本来就支持只发 first_frame（单图生视频），所以门槛改成"有首帧"。
+  assert.match(view, /const list = \(pairs \|\| \[\]\)\.filter\(p => clipState\(p\.shot\) !== 'generating' && effectiveFirstFrame\(p\)\)/)
+  assert.match(view, /last_frame_url: effectiveLastFrame\(p\) \|\| undefined,/, '没有尾帧时不下发该字段')
+  assert.match(view, /const clipCandidates = computed\(\(\) => clipPairs\.value\.filter\(p => !p\.shot\.video_url && effectiveFirstFrame\(p\)\)\)/)
+  assert.match(view, /generateClips\(clipPairs\.filter\(p => effectiveFirstFrame\(p\)\)\)/)
+  assert.match(view, /:disabled="busy\.clips \|\| !effectiveFirstFrame\(selectedClipPair\) \|\| clipState\(selectedClipPair\.shot\) === 'generating'"/)
+  // 徽标分母是所有镜头（不再减一）
+  assert.match(view, /\$\{shotsWithClip\.value\.length\}\/\$\{shots\.value\.length\}/)
+  // 最后一镜不显示"换尾帧"，并给出单帧说明
+  assert.match(view, /v-if="selectedClipPair\.nextShot"[\s\S]{0,200}?toggleFramePicker\('last'\)/)
+  assert.match(view, /v-if="selectedClipPair && !effectiveLastFrame\(selectedClipPair\)" class="field-hint"/)
+  assert.match(view, /t\('narration\.clips\.singleFrameHint'\)/)
+  // 文案不再说"最后一镜不能生成"
+  const zh = JSON.parse(readApp('locales/zh.json')).narration.clips
+  assert.match(zh.lastHint, /仍可按它的关键帧/)
+  assert.doesNotMatch(zh.lastHint, /如需动画可单独为该镜生成片段/)
+})
+
+test('模型护栏按素材组合细分（i2v 恰好 1 张首帧 → 适合最后一镜）', () => {
+  assert.match(view, /const MODEL_FRAME_SUPPORT = \{[\s\S]{0,220}?'happyhorse-1\.1-i2v': 'first'/)
+  assert.match(view, /if \(!needsLast && support === 'first'\) return ''/)
+  assert.match(view, /if \(support === 'none'\) return t\('narration\.clips\.modelIssueNoMedia', \{ model \}\)/)
+  assert.match(view, /if \(support === 'reference'\) return t\('narration\.clips\.modelIssueReference', \{ model \}\)/)
+  assert.match(view, /return t\('narration\.clips\.modelIssueFirstOnly', \{ model \}\)/)
+  // 推荐模型要匹配当前需要的组合
+  assert.match(view, /return needsLast \? support === 'first\+last' : support === 'first' \|\| support === 'first\+last'/)
+  for (const lang of ['zh', 'en', 'ja', 'ko']) {
+    const clips = JSON.parse(readApp(`locales/${lang}.json`)).narration.clips
+    for (const key of ['modelIssueNoMedia', 'modelIssueReference', 'modelIssueFirstOnly', 'singleFrameHint']) {
+      assert.equal(typeof clips[key], 'string', `${lang} 缺 narration.clips.${key}`)
+      assert.ok(clips[key].includes('{model}') || key === 'singleFrameHint')
+    }
+  }
+})
+
+test('视频上方的操作按钮必须始终存在且状态自解释（真实反馈：有的看得到有的看不到）', () => {
+  // 原来「详情」带 v-if，没生成过的段按钮整块消失；「设为成片」禁用时透明度 0.45 几乎看不见。
+  assert.doesNotMatch(view, /<button\s*\r?\n\s*v-if="detailTask\(selectedClipPair\)"/, '详情按钮不应再条件消失')
+  assert.match(view, /:disabled="!detailTask\(selectedClipPair\)"/)
+  assert.match(view, /t\('narration\.clips\.detailDisabledHint'\)/, '禁用时要说明原因')
+  // 已是当前成片片段 → 显示状态标签而不是禁用按钮（没点过历史时播放区放的就是当前片段）
+  assert.match(view, /function clipHeadState\(pair\) \{[\s\S]{0,320}?return pair\.shot\.video_url \? 'current' : 'none'/)
+  assert.match(view, /v-if="clipHeadState\(selectedClipPair\) === 'current'"[\s\S]{0,200}?t\('narration\.clips\.isCurrentClip'\)/)
+  assert.match(view, /:disabled="clipHeadState\(selectedClipPair\) === 'none'"/)
+  assert.match(view, /t\('narration\.clips\.useAsClipDisabledHint'\)/)
+  // 禁用态仍要清晰可辨（全局 0.45 太淡）
+  assert.match(view, /\.ns-vid-head-actions \.btn:disabled \{ opacity: \.65; \}/)
+  for (const lang of ['zh', 'en', 'ja', 'ko']) {
+    const clips = JSON.parse(readApp(`locales/${lang}.json`)).narration.clips
+    for (const key of ['isCurrentClip', 'useAsClipDisabledHint', 'detailDisabledHint']) {
+      assert.equal(typeof clips[key], 'string', `${lang} 缺 narration.clips.${key}`)
+    }
+  }
 })
 
 test('文案四种语言齐全（含多处生成与选用说明）', () => {

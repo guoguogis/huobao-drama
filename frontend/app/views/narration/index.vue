@@ -353,7 +353,7 @@
         </section>
 
         <!-- ⑤ 首尾帧片段：左列片段列表 + 右侧详情（主播放器 + 多次生成的历史） -->
-        <section v-else-if="activeNode === 'clips'" class="card ns-card">
+        <section v-else-if="activeNode === 'clips'" class="card ns-card ns-card-fill">
           <div class="ns-card-head">
             <h2 class="ns-card-title">{{ t('narration.clips.title') }}</h2>
             <p class="ns-card-desc">{{ t('narration.clips.desc') }}</p>
@@ -368,7 +368,7 @@
                   ? t('narration.clips.generatingCount', { n: shotsGeneratingClip.length })
                   : t('narration.clips.generateMissing', { n: clipCandidates.length }) }}
               </button>
-              <button class="btn" :disabled="busy.clips || anyClipGenerating" @click="generateClips(clipPairs.filter(p => p.next))">
+              <button class="btn" :disabled="busy.clips || anyClipGenerating" @click="generateClips(clipPairs.filter(p => effectiveFirstFrame(p)))">
                 <RefreshCw :size="13" /> {{ t('narration.clips.regenerateAll') }}
               </button>
               <label class="ns-inline-check">
@@ -419,18 +419,31 @@
                     <span v-if="activeClipView.kind === 'generating'" class="ns-vid-sub">{{ elapsedText(activeClipView.task) }}</span>
                   </div>
                   <div class="ns-vid-head-actions">
+                    <!-- 已经是当前成片片段：用状态标签替代"禁用的按钮"，避免"有时有按钮有时没有"的错觉 -->
+                    <span
+                      v-if="clipHeadState(selectedClipPair) === 'current'"
+                      class="tag tag-success ns-vid-current-tag"
+                    >
+                      <Check :size="11" /> {{ t('narration.clips.isCurrentClip') }}
+                    </span>
                     <button
+                      v-else
                       class="btn btn-sm"
-                      :disabled="!activeHistoryTask(selectedClipPair) || isActiveClipSelected(selectedClipPair)"
-                      :title="t('narration.clips.useAsClipHint')"
+                      :disabled="clipHeadState(selectedClipPair) === 'none'"
+                      :title="clipHeadState(selectedClipPair) === 'none'
+                        ? t('narration.clips.useAsClipDisabledHint')
+                        : t('narration.clips.useAsClipHint')"
                       @click="useHistoryAsClip(selectedClipPair)"
                     >
                       <Check :size="12" /> {{ t('narration.clips.useAsClip') }}
                     </button>
+                    <!-- 详情常驻：没有生成记录时置灰并说明原因（原来直接消失，用户以为按钮时有时无） -->
                     <button
-                      v-if="detailTask(selectedClipPair)"
                       class="btn btn-sm"
-                      :title="t('narration.clips.detailTitle')"
+                      :disabled="!detailTask(selectedClipPair)"
+                      :title="detailTask(selectedClipPair)
+                        ? t('narration.clips.detailTitle')
+                        : t('narration.clips.detailDisabledHint')"
                       @click="openClipDetail(selectedClipPair)"
                     >
                       <Info :size="12" /> {{ t('narration.clips.detailTitle') }}
@@ -469,7 +482,7 @@
                     </div>
                     <button
                       class="btn btn-primary btn-sm"
-                      :disabled="busy.clips || !selectedClipPair.next || clipState(selectedClipPair.shot) === 'generating'"
+                      :disabled="busy.clips || !effectiveFirstFrame(selectedClipPair) || clipState(selectedClipPair.shot) === 'generating'"
                       @click="generateClips([selectedClipPair])"
                     >{{ t('narration.clips.generate') }}</button>
                   </div>
@@ -545,13 +558,18 @@
                           {{ t('narration.clips.changeFirst') }}
                         </button>
                         <button
+                          v-if="selectedClipPair.nextShot"
                           type="button" class="btn btn-sm"
-                          :disabled="!selectedClipPair.nextShot"
                           @click="toggleFramePicker('last')"
                         >{{ t('narration.clips.changeLast') }}</button>
                       </div>
                     </div>
                     <div v-else class="ns-vid-refs-empty">{{ t('narration.clips.noRefFrames') }}</div>
+
+                    <!-- 最后一镜只有首帧：说清楚"仍可生成"，避免以为不能出片 -->
+                    <p v-if="selectedClipPair && !effectiveLastFrame(selectedClipPair)" class="field-hint">
+                      {{ t('narration.clips.singleFrameHint') }}
+                    </p>
 
                     <!-- 候选条：本镜候选给首帧，下一镜候选给尾帧（都含"跟随当前关键帧"） -->
                     <div v-if="framePicker" class="ns-frame-candidates">
@@ -641,7 +659,7 @@
 
                   <button
                     class="btn btn-primary ns-vid-action"
-                    :disabled="busy.clips || !selectedClipPair.next || clipState(selectedClipPair.shot) === 'generating'"
+                    :disabled="busy.clips || !effectiveFirstFrame(selectedClipPair) || clipState(selectedClipPair.shot) === 'generating'"
                     @click="generateClips([selectedClipPair])"
                   >
                     <Loader2 v-if="clipState(selectedClipPair.shot) === 'generating'" :size="12" class="animate-spin" />
@@ -689,6 +707,103 @@
         </section>
 
         <!-- ⑦ 拼接导出 -->
+        <!-- ⑧ 字幕：成片之后的独立阶段（复用成片时间轴，独立编辑，硬烧/软字幕两条产物） -->
+        <section v-else-if="activeNode === 'subtitles'" class="card ns-card">
+          <div class="ns-card-head">
+            <h2 class="ns-card-title">{{ t('narration.subs.title') }}</h2>
+            <p class="ns-card-desc">{{ t('narration.subs.desc') }}</p>
+          </div>
+
+          <p v-if="!completedMerges.length" class="ns-empty">{{ t('narration.subs.needMerge') }}</p>
+          <template v-else>
+            <div class="ns-actions ns-actions-top">
+              <label class="ns-inline-check">
+                <span>{{ t('narration.subs.pickMerge') }}</span>
+                <BaseSelect v-model="subtitleMergeId" :options="mergeOptions" />
+              </label>
+              <button class="btn btn-sm" :disabled="subLoading || !subtitleMergeId" @click="loadSubtitle()">
+                <Loader2 v-if="subLoading" :size="12" class="animate-spin" /><RefreshCw v-else :size="13" />
+                {{ t('narration.subs.reload') }}
+              </button>
+              <button class="btn btn-sm" :disabled="subSaving || !subLines.length" @click="saveSubtitle()">
+                <Loader2 v-if="subSaving" :size="12" class="animate-spin" />
+                {{ t('narration.subs.save') }}
+              </button>
+              <span v-if="subDirty" class="ns-dirty-chip">{{ t('narration.brief.unsaved') }}</span>
+            </div>
+
+            <p v-if="!subLines.length" class="ns-empty">{{ t('narration.subs.noLines') }}</p>
+            <div v-else class="ns-sub-layout">
+              <!-- 左：逐条字幕（时间只读，文本可编辑） -->
+              <div class="ns-sub-lines">
+                <div v-for="(line, i) in subLines" :key="line.index" class="ns-sub-line">
+                  <span class="ns-sub-no mono">{{ i + 1 }}</span>
+                  <span class="ns-sub-time mono">{{ formatSubTime(line.start) }} → {{ formatSubTime(line.end) }}</span>
+                  <textarea
+                    v-model="line.text"
+                    class="textarea ns-sub-text"
+                    rows="2"
+                    @input="subDirty = true"
+                  ></textarea>
+                </div>
+              </div>
+
+              <!-- 右：样式与产物 -->
+              <aside class="ns-sub-side">
+                <div class="ns-vid-section">
+                  <div class="ns-vid-section-head"><span class="ns-vid-label">{{ t('narration.subs.style') }}</span></div>
+                  <div class="ns-sub-params">
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.maxChars') }}</span>
+                      <input v-model.number="subStyle.maxChars" class="input" type="number" min="6" max="60" @input="subDirty = true" /></label>
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.fontSize') }}</span>
+                      <input v-model.number="subStyle.fontSize" class="input" type="number" min="8" max="72" @input="subDirty = true" /></label>
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.offset') }}</span>
+                      <input v-model.number="subStyle.offsetSec" class="input" type="number" step="0.1" min="-30" max="30" @input="subDirty = true" /></label>
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.outline') }}</span>
+                      <input v-model.number="subStyle.outline" class="input" type="number" min="0" max="6" @input="subDirty = true" /></label>
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.marginV') }}</span>
+                      <input v-model.number="subStyle.marginV" class="input" type="number" min="0" max="200" @input="subDirty = true" /></label>
+                    <label class="ns-sub-param"><span>{{ t('narration.subs.color') }}</span>
+                      <input v-model="subColorHex" class="input ns-sub-color" type="color" @input="onSubColorInput" /></label>
+                  </div>
+                  <span class="field-hint">{{ t('narration.subs.styleHint') }}</span>
+                </div>
+
+                <div class="ns-vid-section">
+                  <div class="ns-vid-section-head"><span class="ns-vid-label">{{ t('narration.subs.render') }}</span></div>
+                  <div class="ns-actions">
+                    <button class="btn btn-primary btn-sm" :disabled="subRendering || !subtitleMergeId" @click="renderSubtitle(true, true)">
+                      <Loader2 v-if="subRendering" :size="12" class="animate-spin" /><Film v-else :size="13" />
+                      {{ t('narration.subs.renderBoth') }}
+                    </button>
+                    <button class="btn btn-sm" :disabled="subRendering || !subtitleMergeId" @click="renderSubtitle(true, false)">
+                      {{ t('narration.subs.renderBurn') }}
+                    </button>
+                    <button class="btn btn-sm" :disabled="subRendering || !subtitleMergeId" @click="renderSubtitle(false, true)">
+                      {{ t('narration.subs.renderSoft') }}
+                    </button>
+                  </div>
+                  <span class="field-hint">{{ t('narration.subs.renderHint') }}</span>
+                  <p v-if="subStatus === 'rendering'" class="field-hint">
+                    <Loader2 :size="11" class="animate-spin" /> {{ t('narration.subs.rendering') }}
+                  </p>
+                  <p v-else-if="subStatus === 'failed'" class="ns-warn">{{ t('narration.subs.failed') }}：{{ subError }}</p>
+                </div>
+
+                <div v-if="subOutputs.length" class="ns-vid-section">
+                  <div class="ns-vid-section-head"><span class="ns-vid-label">{{ t('narration.subs.outputs') }}</span></div>
+                  <div class="ns-sub-outputs">
+                    <a v-for="o in subOutputs" :key="o.url" class="ns-sub-output" :href="o.url" target="_blank" rel="noopener">
+                      <span class="tag" :class="o.tagClass">{{ o.tag }}</span>
+                      <span class="mono truncate">{{ o.url }}</span>
+                    </a>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </template>
+        </section>
+
         <section v-else-if="activeNode === 'export'" class="card ns-card">
           <div class="ns-card-head">
             <h2 class="ns-card-title">{{ t('narration.export.title') }}</h2>
@@ -1007,6 +1122,8 @@ const tree = computed(() => ([
     label: t('narration.sections.export'),
     items: [
       { key: 'export', label: t('narration.tree.export') },
+      // 字幕独立成阶段：它消费「已成片」的记录，产出带字幕的新成片
+      { key: 'subtitles', label: t('narration.tree.subtitles') },
       { key: 'merges', label: t('narration.tree.merges') },
     ],
   },
@@ -1052,7 +1169,7 @@ const clipPairs = computed(() => shots.value.map((s, i) => {
   const next = nextShot?.keyframe_image || ''
   return { shot: s, next, nextShot, targetDuration: Math.round((s.duration_sec || 0) * 100) / 100 }
 }))
-const clipCandidates = computed(() => clipPairs.value.filter(p => !p.shot.video_url && p.next))
+const clipCandidates = computed(() => clipPairs.value.filter(p => !p.shot.video_url && effectiveFirstFrame(p)))
 const lastShotHint = computed(() => (shots.value.length ? t('narration.clips.lastHint') : ''))
 
 const allSelected = computed(() => shots.value.length > 0 && exportSelectedIds.value.length === shots.value.length)
@@ -1077,7 +1194,7 @@ function nodeBadge(key) {
   if (key === 'scripts') return scripts.value.length ? String(scripts.value.length) : ''
   if (key === 'plan') return shots.value.length ? String(shots.value.length) : ''
   if (key === 'images') return shotsMissingImage.value.length ? `${shotsWithImage.value.length}/${shots.value.length}` : ''
-  if (key === 'clips') return clipCandidates.value.length ? `${shotsWithClip.value.length}/${Math.max(0, shots.value.length - 1)}` : ''
+  if (key === 'clips') return clipCandidates.value.length ? `${shotsWithClip.value.length}/${shots.value.length}` : ''
   if (key === 'audio') return shotsMissingAudio.value.length ? `${shotsWithAudio.value.length}/${shots.value.length}` : ''
   if (key === 'merges') return merges.value.length ? String(merges.value.length) : ''
   return ''
@@ -1191,6 +1308,20 @@ function isHistoryCurrent(shot, h) { return !!h?.path && h.path === shot?.video_
 function isActiveClipSelected(pair) {
   const h = activeHistoryTask(pair)
   return !!h && isHistoryCurrent(pair.shot, h)
+}
+
+/**
+ * 头部「设为成片片段」这一格该显示什么：'current'（已是当前，显示状态标签）
+ * / 'use'（可选用）/ 'none'（还没有可用的成品版本）。
+ *
+ * 为什么不能只看"有没有显式点过历史"：没点过时播放区放的就是当前成片片段，
+ * 此时再显示一个禁用的「设为成片片段」，用户根本看不出它已经是当前版本。
+ */
+function clipHeadState(pair) {
+  if (!pair) return 'none'
+  const h = activeHistoryTask(pair)
+  if (h) return isHistoryCurrent(pair.shot, h) ? 'current' : 'use'
+  return pair.shot.video_url ? 'current' : 'none'
 }
 
 /** 把查看中的历史版本写回该段主视频（导出的依据） */
@@ -1567,20 +1698,40 @@ function historyStatusLabel(status) {
 }
 
 /**
- * 「当前视频模型是否吃不下首尾帧」——生成前就提示，并给出一键切换。
- * 背景：happyhorse 系列的 t2v/r2v/i2v 都不接受 first_frame/last_frame，
- * 而首尾帧片段必然要发首尾帧，不提前拦就会白烧一次生成（项目 19 就有 3 条这样的失败记录）。
+ * 「当前视频模型吃不吃这种素材组合」——生成前提示，并给出一键切换。
+ *
+ * 依据后端适配器的族定义（aliyun-video.ts）：
+ * - happyhorse-1.1-t2v：不接受任何 media
+ * - happyhorse-1.1-r2v：只接受 reference_image（不认 first/last frame）
+ * - happyhorse-1.1-i2v：**恰好 1 张 first_frame**（不能同时给尾帧）
+ * 所以最后一镜（只有首帧）用 i2v 是合法的，而中间片段（首帧+尾帧）不行——不能一刀切地拦。
  */
-const FRAME_INCAPABLE = ['happyhorse-1.1-t2v', 'happyhorse-1.1-r2v', 'happyhorse-1.1-i2v']
+const MODEL_FRAME_SUPPORT = {
+  'happyhorse-1.1-t2v': 'none',
+  'happyhorse-1.1-r2v': 'reference',
+  'happyhorse-1.1-i2v': 'first',
+}
 function clipModelIssue(pair) {
   if (!pair) return ''
   const model = String(videoPick.value.model || '')
-  if (!model || !FRAME_INCAPABLE.includes(model)) return ''
-  return t('narration.clips.modelIssue', { model })
+  if (!model) return ''
+  const support = MODEL_FRAME_SUPPORT[model]
+  if (!support) return ''
+  const needsLast = !!effectiveLastFrame(pair)
+  if (!needsLast && support === 'first') return ''      // 单帧 + i2v：合法组合
+  if (support === 'none') return t('narration.clips.modelIssueNoMedia', { model })
+  if (support === 'reference') return t('narration.clips.modelIssueReference', { model })
+  return t('narration.clips.modelIssueFirstOnly', { model })
 }
-/** 可替代的、支持首尾帧的模型（从顶栏视频选项里挑第一个） */
-const frameCapableModel = computed(() =>
-  videoModelOptions.value.find(o => !FRAME_INCAPABLE.includes(o.model)) || null)
+/** 可替代的、支持当前素材组合的模型（优先能同时吃首尾帧的） */
+const frameCapableModel = computed(() => {
+  const pair = selectedClipPair.value
+  const needsLast = !!effectiveLastFrame(pair)
+  return videoModelOptions.value.find((o) => {
+    const support = MODEL_FRAME_SUPPORT[o.model] || 'first+last'
+    return needsLast ? support === 'first+last' : support === 'first' || support === 'first+last'
+  }) || null
+})
 const anyImageGenerating = computed(() => shots.value.some(s => imageState(s) === 'generating'))
 const anyClipGenerating = computed(() => shots.value.some(s => clipState(s) === 'generating'))
 
@@ -1708,6 +1859,138 @@ async function loadMerges() {
   try { merges.value = (await mergeAPI.list(episodeId.value)) || [] } catch { merges.value = [] }
 }
 
+// ===== ⑧ 字幕：成片后的独立阶段 =====
+// 字幕行由成片时间轴生成（后端复用 video_merges.timeline），生成后可自由编辑：
+// 改字幕不会影响配音与画面，两条产物（硬烧 / 软字幕）可并存对比。
+const subtitleMergeId = ref(0)
+const subLines = ref([])
+const subStyle = reactive({ maxChars: 20, offsetSec: 0, fontSize: 20, outline: 2, marginV: 24, primaryColour: '&H00FFFFFF' })
+const subMeta = ref(null)
+const subStatus = ref('draft')
+const subError = ref('')
+const subLoading = ref(false)
+const subSaving = ref(false)
+const subRendering = ref(false)
+const subDirty = ref(false)
+let subPollTimer = null
+
+const completedMerges = computed(() => (merges.value || []).filter(m => m.status === 'completed' && (m.merged_url || m.mergedUrl)))
+const mergeOptions = computed(() => completedMerges.value.map(m => ({
+  value: m.id,
+  label: `${m.title || '成片'} · ${m.duration || 0}s · ${formatHistoryTime(m.completed_at || m.completedAt)}`,
+})))
+
+/** ASS 颜色（&HAABBGGRR）↔ 十六进制（#RRGGBB）：界面上给颜色选择器用 */
+const subColorHex = computed({
+  get: () => {
+    const m = /^&H([0-9A-Fa-f]{2})?([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})$/.exec(String(subStyle.primaryColour || ''))
+    return m ? `#${m[4]}${m[3]}${m[2]}`.toLowerCase() : '#ffffff'
+  },
+  set: (hex) => {
+    const h = String(hex || '#ffffff').replace('#', '')
+    if (h.length === 6) subStyle.primaryColour = `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase()
+  },
+})
+function onSubColorInput() { subDirty.value = true }
+function formatSubTime(sec) {
+  const total = Math.max(0, Number(sec) || 0)
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`
+}
+
+const subOutputs = computed(() => {
+  const list = []
+  if (subMeta.value?.srt_url) list.push({ url: `/${subMeta.value.srt_url}`, tag: 'SRT', tagClass: '' })
+  if (subMeta.value?.burned_url) list.push({ url: `/${subMeta.value.burned_url}`, tag: t('narration.subs.tagBurn'), tagClass: 'tag-accent' })
+  if (subMeta.value?.soft_url) list.push({ url: `/${subMeta.value.soft_url}`, tag: t('narration.subs.tagSoft'), tagClass: 'tag-success' })
+  return list
+})
+
+function applySubtitle(data) {
+  subMeta.value = { srt_url: data.srt_url, burned_url: data.burned_url, soft_url: data.soft_url }
+  subLines.value = (data.lines || []).map(l => ({ ...l }))
+  Object.assign(subStyle, data.style || {})
+  subStatus.value = data.status || 'draft'
+  subError.value = data.error_msg || ''
+  subDirty.value = false
+}
+
+async function loadSubtitle(mergeId = subtitleMergeId.value) {
+  if (!mergeId) return
+  subLoading.value = true
+  try {
+    const data = await narrationAPI.subtitle(dramaId, mergeId)
+    subtitleMergeId.value = mergeId
+    applySubtitle(data)
+    if (data.status === 'rendering') scheduleSubPoll()
+  } catch (e) {
+    toastError(e, { fallback: 'narration.subs.loadFailed' })
+  } finally {
+    subLoading.value = false
+  }
+}
+
+/** 渲染是异步的（硬烧要重编码整片）：轮询到 ready/failed */
+function scheduleSubPoll() {
+  if (subPollTimer) return
+  subPollTimer = setInterval(async () => {
+    try {
+      const data = await narrationAPI.subtitle(dramaId, subtitleMergeId.value)
+      subMeta.value = { srt_url: data.srt_url, burned_url: data.burned_url, soft_url: data.soft_url }
+      subStatus.value = data.status
+      subError.value = data.error_msg || ''
+      if (data.status !== 'rendering') {
+        clearInterval(subPollTimer); subPollTimer = null
+        if (data.status === 'ready') toast.success(t('narration.subs.renderDone'))
+        subDirty.value = false
+        // 刷新产物列表但保留正在编辑的文本
+        subMeta.value = { srt_url: data.srt_url, burned_url: data.burned_url, soft_url: data.soft_url }
+      }
+    } catch { clearInterval(subPollTimer); subPollTimer = null }
+  }, 2000)
+}
+
+async function saveSubtitle() {
+  if (!subtitleMergeId.value) return false
+  subSaving.value = true
+  try {
+    const data = await narrationAPI.saveSubtitle(dramaId, {
+      merge_id: subtitleMergeId.value,
+      lines: subLines.value,
+      style: { ...subStyle },
+    })
+    applySubtitle(data)
+    toast.success(t('narration.subs.saved'))
+    return true
+  } catch (e) {
+    toastError(e, { fallback: 'narration.subs.saveFailed' })
+    return false
+  } finally {
+    subSaving.value = false
+  }
+}
+
+async function renderSubtitle(burn, soft) {
+  if (!subtitleMergeId.value || subRendering.value) return
+  // 渲染前先保存：否则烧的是上一次的文本
+  if (subDirty.value) { if (!await saveSubtitle()) return }
+  subRendering.value = true
+  try {
+    await narrationAPI.renderSubtitle(dramaId, { merge_id: subtitleMergeId.value, burn, soft })
+    subStatus.value = 'rendering'
+    scheduleSubPoll()
+    toast.success(t('narration.subs.renderStarted'))
+  } catch (e) {
+    toastError(e, { fallback: 'narration.subs.renderFailed' })
+  } finally {
+    subRendering.value = false
+  }
+}
+
+/** 选中成片后自动加载它的字幕（没有就用时间轴初始化一份） */
+watch(subtitleMergeId, (id, old) => { if (id && id !== old) void loadSubtitle(id) })
+
 async function loadConfigs() {
   try {
     const [txt, img, vid, aud] = await Promise.all([
@@ -1731,6 +2014,10 @@ async function reloadAll() {
     await loadPlan()
     await loadShots()
     await loadMerges()
+    // 字幕阶段默认挂到最近的成片上（没有成片则保持空，面板会提示先生成成片）
+    if (!subtitleMergeId.value && completedMerges.value.length) {
+      await loadSubtitle(completedMerges.value[0].id)
+    }
   } catch (e) {
     toastError(e, { fallback: 'narration.loadFailed' })
   } finally {
@@ -1941,7 +2228,8 @@ async function resetImgPrompt(shot) {
 }
 
 /** 生成首尾帧片段（镜头 i 的关键帧 → 镜头 i+1 的关键帧） */async function generateClips(pairs) {
-  const list = (pairs || []).filter(p => clipState(p.shot) !== 'generating' && p.next)
+  // 只要求"有首帧"：最后一镜没有下一帧也能生成（按首帧 + 提示词驱动的单图生视频）
+  const list = (pairs || []).filter(p => clipState(p.shot) !== 'generating' && effectiveFirstFrame(p))
   if (busy.clips || !list.length) return
   busy.clips = true
   try {
@@ -1953,9 +2241,10 @@ async function resetImgPrompt(shot) {
           storyboard_id: p.shot.id,
           drama_id: dramaId,
           prompt: p.shot.video_prompt || p.shot.keyframe_prompt || p.shot.narration_text,
-          // 首尾帧用「生效值」：用户选过候选就用选的，没选才回落到当前关键帧
+          // 首尾帧用「生效值」：用户选过候选就用选的，没选才回落到当前关键帧。
+          // 尾帧可能没有（最后一镜）：此时只发首帧，由提示词驱动画面运动（单图生视频）。
           first_frame_url: effectiveFirstFrame(p),
-          last_frame_url: effectiveLastFrame(p),
+          last_frame_url: effectiveLastFrame(p) || undefined,
           generate_audio: form.clip_with_audio,
           // 片段长度贴近该句时长；各家视频模型区间不同（MiniMax/Wan 常见 4~15s），取交集最稳
           duration: Math.max(4, Math.min(15, Math.round(p.targetDuration))),
@@ -2081,6 +2370,7 @@ onUnmounted(() => {
   if (tickTimer) clearInterval(tickTimer)
   if (promptFlashTimer) clearTimeout(promptFlashTimer)
   if (imgPromptFlashTimer) clearTimeout(imgPromptFlashTimer)
+  if (subPollTimer) clearInterval(subPollTimer)
   window.removeEventListener('keydown', onPreviewKey)
 })
 </script>
@@ -2121,7 +2411,19 @@ onUnmounted(() => {
 .pipe-item.active .pipe-badge { color: var(--accent-text); background: var(--bg-elevated); }
 
 /* ===== 右侧单面板 ===== */
-.ns-main { flex: 1; overflow-y: auto; padding: 16px 20px 40px; }
+.ns-main { flex: 1; overflow-y: auto; padding: 16px 20px 40px; display: flex; flex-direction: column; }
+/* 需要"按父容器高度排布"的面板（如首尾帧片段）：整卡撑满，内部各列自己滚动 */
+.ns-card-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ns-card-fill > .ns-clip-layout { flex: 1; min-height: 320px; align-items: stretch; overflow: hidden; }
+.ns-card-fill .ns-clip-list-col { height: 100%; min-height: 0; max-height: none; overscroll-behavior: contain; }
+.ns-card-fill .ns-clip-detail { min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+/*
+ * 关键：右侧详情是 flex 列，默认 flex-shrink:1 会把「视频舞台」压成 0 高
+ * （实测 stage 高度为 0、检查器溢出到容器之外，看起来就是"内容显示不全"）。
+ * 这里禁止子项收缩，让它们保持自然高度，由容器滚动来呈现 —— 与左列互不影响。
+ */
+.ns-card-fill .ns-clip-detail > * { flex: 0 0 auto; }
+.ns-vid-inspector > * { flex: 0 0 auto; }
 .ns-card { padding: 16px 18px; }
 .ns-card-head { margin-bottom: 12px; }
 .ns-card-title { font-size: 14px; font-weight: 650; color: var(--text-1); margin: 0 0 4px; }
@@ -2224,7 +2526,7 @@ onUnmounted(() => {
 .ns-arrow { color: var(--text-3); }
 .ns-clip-dur { font-size: 11px; color: var(--text-3); }
 .ns-clip-layout { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 14px; align-items: start; }
-.ns-clip-list-col { display: flex; flex-direction: column; gap: 6px; max-height: 620px; overflow-y: auto; padding-right: 4px; }
+.ns-clip-list-col { display: flex; flex-direction: column; gap: 6px; max-height: 620px; overflow-y: auto; padding-right: 4px; flex: 1 1 auto; }
 .ns-clip-item {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
   padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); color: var(--text-2);
@@ -2307,6 +2609,9 @@ onUnmounted(() => {
 .ns-vid-status.is-failed .ns-vid-dot { background: var(--error); }
 .ns-vid-sub { font-size: 11px; color: var(--text-3); }
 .ns-vid-head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* 头部操作常驻可辨：全局禁用态透明度 0.45 在这些按钮上几乎看不见，用户会以为"按钮时有时无" */
+.ns-vid-head-actions .btn:disabled { opacity: .65; }
+.ns-vid-current-tag { display: inline-flex; align-items: center; gap: 4px; }
 
 .ns-vid-stage {
   width: 100%; max-width: 640px; aspect-ratio: 16/9; border-radius: var(--radius);
@@ -2381,6 +2686,25 @@ onUnmounted(() => {
 .ns-vid-action { width: 100%; justify-content: center; }
 
 /* 生成详情弹框 */
+/* ===== 字幕面板：左侧逐条编辑 + 右侧样式与产物 ===== */
+.ns-sub-layout { display: grid; grid-template-columns: 1fr minmax(260px, 320px); gap: 16px; align-items: start; }
+.ns-sub-lines { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.ns-sub-line { display: grid; grid-template-columns: 28px 108px 1fr; gap: 8px; align-items: start; }
+.ns-sub-no { font-size: 11px; color: var(--text-3); padding-top: 8px; text-align: right; }
+.ns-sub-time { font-size: 11px; color: var(--text-3); padding-top: 8px; }
+.ns-sub-text { font-size: 12px; line-height: 1.5; resize: vertical; min-height: 44px; }
+.ns-sub-side { display: flex; flex-direction: column; gap: 14px; }
+.ns-sub-params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.ns-sub-param { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-3); }
+.ns-sub-param .input { padding: 5px 8px; font-size: 12px; }
+.ns-sub-color { padding: 2px; height: 30px; }
+.ns-sub-outputs { display: flex; flex-direction: column; gap: 6px; }
+.ns-sub-output {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--bg-elevated); color: var(--text-1); text-decoration: none; font-size: 11px;
+}
+.ns-sub-output:hover { border-color: var(--accent); }
+
 .ns-detail-dialog { width: min(720px, calc(100vw - 48px)); max-height: 88vh; display: flex; flex-direction: column; }
 .ns-detail-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .ns-detail-title { font-size: 14px; font-weight: 700; color: var(--text-0); }

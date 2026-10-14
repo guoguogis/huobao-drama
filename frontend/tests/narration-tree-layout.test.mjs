@@ -24,22 +24,27 @@ test('左侧是树形菜单：分区包含多个可点子项，并有选中/完�
   assert.match(view, /@click="activeNode = item\.key"/, '点击子项切换当前节点')
 })
 
-test('三个分区覆盖创作/制作/导出，共 8 个子项', () => {
+test('三个分区覆盖创作/制作/导出，共 9 个子项（含成片后的字幕阶段）', () => {
   for (const key of ['create', 'produce', 'export']) {
     assert.ok(view.includes(`label: t('narration.sections.${key}')`), `缺少分区 narration.sections.${key}`)
   }
-  for (const node of ['brief', 'scripts', 'plan', 'images', 'clips', 'audio', 'export', 'merges']) {
+  for (const node of ['brief', 'scripts', 'plan', 'images', 'clips', 'audio', 'export', 'subtitles', 'merges']) {
     assert.ok(view.includes(`{ key: '${node}', label: t('narration.tree.${node}') }`), `树里缺少节点 ${node}`)
   }
   const nodes = view.match(/\{ key: '[a-z]+', label: t\('narration\.tree\./g) || []
-  assert.equal(nodes.length, 8, `树节点数量应为 8，实际 ${nodes.length}`)
+  assert.equal(nodes.length, 9, `树节点数量应为 9，实际 ${nodes.length}`)
+  // 字幕排在「拼接导出」之后：它是成片后的独立阶段
+  assert.ok(view.indexOf("key: 'export', label: t('narration.tree.export')") < view.indexOf("key: 'subtitles', label: t('narration.tree.subtitles')"),
+    '字幕节点应排在拼接导出之后')
+  assert.ok(view.indexOf("key: 'subtitles', label: t('narration.tree.subtitles')") < view.indexOf("key: 'merges', label: t('narration.tree.merges')"),
+    '字幕节点应排在成片列表之前（它消费成片、产出带字幕的新成片）')
 })
 
 test('右侧是互斥单面板（v-if/v-else-if 链），不是把所有环节堆在一列', () => {
   const mains = view.slice(view.indexOf('<main class="ns-main">'), view.indexOf('</main>'))
   // 每个节点都有自己的 v-if / v-else-if 分支
   assert.match(mains, /<section v-if="activeNode === 'brief'"/)
-  for (const node of ['scripts', 'plan', 'images', 'clips', 'audio', 'export']) {
+  for (const node of ['scripts', 'plan', 'images', 'clips', 'audio', 'subtitles', 'export']) {
     assert.ok(mains.includes(`<section v-else-if="activeNode === '${node}'"`), `${node} 面板应为 v-else-if 分支`)
   }
   // 最后一个面板用 v-else 兜底（成片列表），且**不允许**有无条件渲染的块（那就会变成瀑布流）
@@ -47,9 +52,9 @@ test('右侧是互斥单面板（v-if/v-else-if 链），不是把所有环节�
   assert.equal(fallback.length, 1, `应恰好有 1 块 v-else 兜底，实际 ${fallback.length}`)
   const unconditional = mains.match(/<section class="card ns-card"/g) || []
   assert.equal(unconditional.length, 0, `不允许无条件渲染的面板块（瀑布流特征），实际 ${unconditional.length}`)
-  // 面板总数 = 1(v-if) + 6(v-else-if) + 1(v-else) = 8
+  // 面板总数 = 1(v-if) + 7(v-else-if) + 1(v-else) = 9
   const panels = mains.match(/<section (v-if|v-else-if|v-else)[ =]/g) || []
-  assert.equal(panels.length, 8, `面板数应为 8，实际 ${panels.length}`)
+  assert.equal(panels.length, 9, `面板数应为 9，实际 ${panels.length}`)
 })
 
 test('各面板只出现一次（避免同一内容在多处重复堆叠）', () => {
@@ -65,7 +70,8 @@ test('子项徽标反映未完成量（让「哪一步没做完」一眼可见�
   assert.match(view, /function nodeBadge\(key\)/)
   // 徽标分子必须是数组长度：漏掉 .length 时数组会被插值成 "[object Object]…"（真实踩过）
   assert.match(view, /\$\{shotsWithImage\.value\.length\}\/\$\{shots\.value\.length\}/)
-  assert.match(view, /\$\{shotsWithClip\.value\.length\}\/\$\{Math\.max\(0, shots\.value\.length - 1\)\}/)
+  // 分母是所有镜头：最后一镜也能生成片段（只有首帧，走单图生视频）
+  assert.match(view, /\$\{shotsWithClip\.value\.length\}\/\$\{shots\.value\.length\}/)
   assert.match(view, /\$\{shotsWithAudio\.value\.length\}\/\$\{shots\.value\.length\}/)
   assert.doesNotMatch(view, /\$\{shotsWith(Image|Clip|Audio)\.value\}/, '徽标里不得直接插值数组')
   assert.match(view, /function sectionHasActive\(sec\)/)

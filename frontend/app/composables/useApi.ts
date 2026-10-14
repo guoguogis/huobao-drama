@@ -188,7 +188,14 @@ export const narrationAPI = {
   /** 逐句配音：speed 取项目倍速（画面据此对齐） */
   synthesize: (dramaId: number, d: { shot_ids?: number[]; speed?: number; voice_id?: string; config_id?: number; model?: string; format?: 'mp3' | 'wav' }) =>
     api.post(`/narration/${dramaId}/synthesize`, d),
-  /** 剪辑合并：按句界重定时后拼接（成片记录与漫剧共用 video_merges 表） */
+  /** 成片列表（字幕阶段要选一个成片来加字幕） */
+  listMerges: (dramaId: number) => api.get(`/narration/${dramaId}/merges`),
+  /** 字幕：读取（不存在则用成片时间轴初始化）/ 保存 / 渲染 */
+  subtitle: (dramaId: number, mergeId: number) => api.get(`/narration/${dramaId}/subtitles?merge_id=${mergeId}`),
+  saveSubtitle: (dramaId: number, d: { merge_id: number; lines?: any[]; style?: any }) =>
+    api.put(`/narration/${dramaId}/subtitles`, d),
+  renderSubtitle: (dramaId: number, d: { merge_id: number; burn?: boolean; soft?: boolean }) =>
+    api.post(`/narration/${dramaId}/subtitles/render`, d),
   merge: (dramaId: number, d: { shot_ids?: number[]; include_audio?: boolean; resolution?: '720p' | '1080p' | '480p' }) =>
     api.post(`/narration/${dramaId}/merge`, d),
   /** 调口播稿 Agent 生成三个差异化版本（pick = 顶栏文本模型 + 其配置 id） */

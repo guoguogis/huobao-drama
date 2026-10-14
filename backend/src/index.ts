@@ -26,6 +26,7 @@ import serverUpdate from './routes/serverUpdate.js'
 import auth from './routes/auth.js'
 import audio from './routes/audio.js'
 import narration from './routes/narration.js'
+import subtitles from './routes/subtitles.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
 import { seedAuthAccount, getAuthUsername } from './services/auth.js'
@@ -83,6 +84,8 @@ api.route('/auth', auth)
 api.route('/audio', audio)
 // 口播视频场景：与漫剧链路并列，互不影响
 api.route('/narration', narration)
+// 字幕是成片后的独立阶段：挂在同一个 /narration 前缀下，路径为 /narration/:dramaId/subtitles
+api.route('/narration', subtitles)
 
 app.route('/api/v1', api)
 

@@ -578,6 +578,22 @@ app.post('/:dramaId/merge', async (c) => {
 
   // 建记录后异步执行（与漫剧拼接同一张表，成片列表/删除逻辑可复用）
   const ts = now()
+  // 逐段实测时间轴：合并会按 targetDuration 强制每段时长，所以这份累计起止就是成片时间轴。
+  // 字幕阶段直接复用它，不再自己算一遍（否则音、画、字会各自漂移）。
+  let cursor = 0
+  const timeline = segments.map((s, i) => {
+    const start = cursor
+    const end = Math.round((cursor + s.targetDuration) * 1000) / 1000
+    cursor = end
+    return {
+      shot_id: selected[i]?.id,
+      shot_number: s.index,
+      start: Math.round(start * 1000) / 1000,
+      end,
+      duration: Math.round(s.targetDuration * 1000) / 1000,
+      text: s.text || '',
+    }
+  })
   const res = await db.insert(schema.videoMerges).values({
     episodeId: episode.id,
     dramaId,
@@ -586,6 +602,7 @@ app.post('/:dramaId/merge', async (c) => {
     model: 'ffmpeg-narration-retimed',
     status: 'processing',
     scenes: JSON.stringify(segments.map(s => s.videoPath || s.imagePath)),
+    timeline: JSON.stringify(timeline),
     createdAt: ts,
   })
   const mergeId = getInsertId(res)
