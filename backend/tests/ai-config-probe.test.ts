@@ -134,6 +134,18 @@ test('400（空体参数校验）：判为可达且属预期，而不是「请�
   })
 })
 
+test('422（空体参数校验）：同样判为可达，而不是「请检查 Base URL」', async () => {
+  // FastAPI 系私有网关对空体缺字段回 422 而非 400（实测 ailab-image 网关回 422 "Field required"）
+  const body = JSON.stringify({ detail: [{ type: 'missing', loc: ['body', 'prompt'], msg: 'Field required', input: {} }] })
+  await withStubGateway(422, body, async (baseUrl) => {
+    const data = (await (await probeConfig(baseUrl)).json() as any).data
+    assert.equal(data.reachable, true)
+    assert.match(data.message, /上游按参数校验拒绝/)
+    assert.match(data.message, /属预期/)
+    assert.doesNotMatch(data.message, /请检查 Base URL/)
+  })
+})
+
 test('200：判为可访问', async () => {
   await withStubGateway(200, JSON.stringify({ data: [{ id: 'qwen-image-2.1' }] }), async (baseUrl) => {
     const data = (await (await probeConfig(baseUrl)).json() as any).data

@@ -496,9 +496,11 @@ app.post('/test', async (c) => {
       body: probe.body ? JSON.stringify(probe.body) : undefined,
     })
     const text = await resp.text()
-    const reachable = [200, 204, 400, 401, 403].includes(resp.status)
+    const reachable = [200, 204, 400, 401, 403, 422].includes(resp.status)
     // 图片/视频探针刻意不带 model（真实请求会创建计费任务），被上游按参数校验拒绝属预期结果。
-    // 判据是「空体探测 + 400」：空体必然过不了参数校验，与 Base URL/鉴权无关；
+    // 判据是「空体探测 + 400/422」：空体必然过不了参数校验，与 Base URL/鉴权无关；
+    // 422 是 FastAPI 系网关对空体缺字段的标配状态码（实测私有网关回 422 "Field required"），
+    // 若只认 400 会把可达的端点误报成「请检查 Base URL」；
     // 不能再只认 MissingParameter 这几个词——不同网关措辞各异
     // （实测某网关回 "Invalid model name passed in model=None"，于是被误报成「请检查 Base URL」）。
     const probeBodyEmpty = !probe.body || Object.keys(probe.body).length === 0
@@ -508,7 +510,7 @@ app.post('/test', async (c) => {
     //   而该配置真实生成完全正常）。
     const billedRiskProbe = probe.method === 'POST' && probeBodyEmpty
       && (body.service_type === 'image' || body.service_type === 'video')
-    const missingParam = !resp.ok && resp.status === 400
+    const missingParam = !resp.ok && (resp.status === 400 || resp.status === 422)
       && (billedRiskProbe || /MissingParameter|RequiredParameter|InvalidParameter/i.test(text))
     // 5xx 是网关自身或其上游的故障：把上游原文带出来，别让用户去怀疑自己的 Base URL
     const upstreamBroken = resp.status >= 500
